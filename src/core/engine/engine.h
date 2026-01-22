@@ -9,7 +9,7 @@ class Engine {
         UI ui;
 
         Engine();
-        void constructWindow();
+        static void constructWindow();
 
     public:
         static Engine& getInstance();
@@ -17,7 +17,7 @@ class Engine {
         Engine(const Engine&) = delete;
         void operator=(const Engine&) = delete;
 
-        void init();
+        static void init();
         void update(float deltaTime);
         void render();
         void run();

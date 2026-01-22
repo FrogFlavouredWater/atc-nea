@@ -47,6 +47,9 @@ void Engine::render() {
     case GameState::GAME_OVER:
         // ui.DrawGameOver(currentState);
         break;
+            
+    default:
+        throw std::runtime_error("Unhandled Mode enum");
     }
 
     EndDrawing();
