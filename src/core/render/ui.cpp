@@ -33,8 +33,10 @@ void UI::DrawMainMenu(GameState& currentState) {
     }
 }
 
-void UI::DrawGameHUD(int aircraftCount) {
+void UI::DrawSimulationHUD(int aircraftCount) {
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
+    DrawText("P = Pause", GetScreenWidth() - 120, 10, 16, DARKGRAY);
+
 }
 
 void UI::DrawBackground()

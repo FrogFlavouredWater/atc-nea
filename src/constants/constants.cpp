@@ -21,7 +21,8 @@ const Constants CONSTANTS = []() {
     
     GameSettings game{
         data["game"]["AIRCRAFT_SPEED"].get<float>(),
-        data["game"]["MAX_AIRCRAFT"].get<int32_t>()
+        data["game"]["MAX_AIRCRAFT"].get<int32_t>(),
+        data["game"]["AIRCRAFT_SIZE"].get<int32_t>()
     };
     
     AudioSettings audio{

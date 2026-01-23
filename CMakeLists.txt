@@ -11,7 +11,6 @@ if(APPLE)
 endif()
 
 
-find_package(spdlog REQUIRED)
 find_package(raylib REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
@@ -21,20 +20,27 @@ add_executable(atc
         src/core/render/ui.cpp
         src/constants/constants.cpp
         src/util/utils.cpp
+        src/logger/logger.cpp
+        src/core/aircraft/Aircraft.cpp
+        src/core/aircraft/Aircraft.h
 )
 
-# literally no idea
 target_include_directories(atc PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         "$ENV{HOME}/Libraries/raygui/src"
-        
 )
 
 target_link_libraries(atc PRIVATE
         raylib
         nlohmann_json::nlohmann_json
-        spdlog::spdlog
 )
+
+# Add compiler-specific flags
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(atc PRIVATE -Wall -Wextra)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(atc PRIVATE /W4 /Zc:__cplusplus)
+endif()
 
 #runtime data available @ src/data/ relative to the executable working dir or sm idk
 add_custom_command(TARGET atc POST_BUILD

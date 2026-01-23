@@ -16,6 +16,7 @@ struct GameSettings
 {
     const float AIRCRAFT_SPEED;
     const int32_t MAX_AIRCRAFT;
+    const int32_t AIRCRAFT_SIZE;
 };
 
 enum class GameState
