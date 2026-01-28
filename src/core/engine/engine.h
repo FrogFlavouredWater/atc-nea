@@ -15,6 +15,7 @@ class Engine {
         //aircraft
         std::vector<std::unique_ptr<Aircraft>> aircraft{}; //dynamic array; 1 unqptr owns 1 aircraft obj;
         Aircraft* selectedAircraft{}; //raw ptr for selected aircraft
+        bool debugEnabled = true;
 
         Engine();
         static void constructWindow();
@@ -24,7 +25,7 @@ class Engine {
         void renderSimulation();
         void handleInput();
         void spawnAircraft();
-        void detectConflicts();
+        void detectConflicts() const;
 
 
     public:

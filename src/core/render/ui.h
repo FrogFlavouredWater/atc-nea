@@ -7,7 +7,7 @@ public:
     UI() = default;
 
     void DrawMainMenu(GameState& currentState);
-    void DrawSimulationHUD(int aircraftCount);
+    void DrawSimulationHUD(int aircraftCount, bool& debugEnabled);
     void DrawPauseMenu(GameState& currentState);
     void DrawBackground();
 };

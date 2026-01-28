@@ -43,12 +43,21 @@ void Engine::renderSimulation() {
         plane->render();
     }
 
-    ui.DrawSimulationHUD(aircraft.size());
+    ui.DrawSimulationHUD(aircraft.size(), debugEnabled);
 
     if (selectedAircraft) {
         DrawText("Selected: ", 10, 40, 20, WHITE);  // Increased font size from 16 to 20
         DrawText(selectedAircraft->getCallsign().c_str(), 110, 40, 20, YELLOW);
         DrawText("Controls: WASD/Arrows = Vector/Speed", 10, 65, 16, GRAY);
+
+        if (debugEnabled) {
+            int startY = 100;
+            DrawText("--- DEBUG DATA ---", 10, startY, 16, GREEN);
+            DrawText(TextFormat("Pos: %.2f, %.2f", selectedAircraft->getPosition().x, selectedAircraft->getPosition().y), 10, startY + 20, 16, GREEN);
+            DrawText(TextFormat("Heading: %.2f (Target: %.2f)", selectedAircraft->getHeading(), selectedAircraft->getTargetHeading()), 10, startY + 40, 16, GREEN);
+            DrawText(TextFormat("Speed: %.2f (Target: %.2f)", selectedAircraft->getSpeed(), selectedAircraft->getTargetSpeed()), 10, startY + 60, 16, GREEN);
+            DrawText(TextFormat("Altitude: %i (Target: %i)", selectedAircraft->getAltitude(), selectedAircraft->getTargetAltitude()), 10, startY + 80, 16, GREEN);
+        }
     } else {
         DrawText("Click aircraft to vector", 10, 40, 20, WHITE);  // Increased font size
     }
@@ -56,7 +65,6 @@ void Engine::renderSimulation() {
 
 //TODO: TEMPORARY <REMOVE THIS>
 void Engine::handleInput() {
-    // Aircraft selection with mouse
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mousePos = GetMousePosition();
         selectedAircraft = nullptr;
@@ -72,25 +80,27 @@ void Engine::handleInput() {
         }
     }
 
-    // Control selected aircraft with keyboard
     if (selectedAircraft) {
         float currentHeading = selectedAircraft->getHeading();
         float currentSpeed = selectedAircraft->getSpeed();
 
+        float targetHeading = selectedAircraft->getTargetHeading();
+        float targetSpeed = selectedAircraft->getTargetSpeed();
+
         // Heading controls
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-            selectedAircraft->setHeading(currentHeading - 30);
+            selectedAircraft->setHeading(targetHeading - 30);
         }
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-            selectedAircraft->setHeading(currentHeading + 30);
+            selectedAircraft->setHeading(targetHeading + 30);
         }
 
         // Speed controls
         if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-            selectedAircraft->setSpeed(currentSpeed + 25);
+            selectedAircraft->setSpeed(targetSpeed + 1);
         }
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-            selectedAircraft->setSpeed(currentSpeed - 25);
+            selectedAircraft->setSpeed(targetSpeed - 1);
         }
     }
 }
@@ -98,19 +108,19 @@ void Engine::handleInput() {
 void Engine::spawnAircraft() {
     //TODO: TEMPORARY <REMOVE THIS>
     aircraft.push_back(std::make_unique<Aircraft>(
-        Vector2{100, 200}, 90.0f, 5.0f, "AA123"
+        Vector2{100, 200}, 90.0f, 5.0f, 3000, "AA123"
     ));
 
     aircraft.push_back(std::make_unique<Aircraft>(
-        Vector2{300, 400}, 270.0f, 6.0f, "BA456"
+        Vector2{300, 400}, 270.0f, 6.0f, 3500, "BA456"
     ));
 
     aircraft.push_back(std::make_unique<Aircraft>(
-        Vector2{500, 100}, 180.0f, 5.5f, "UA789"
+        Vector2{500, 100}, 180.0f, 5.5f, 3200, "UA789"
     ));
 }
 
-void Engine::detectConflicts() {
+void Engine::detectConflicts() const {
     //reset all aircraft to non conflict state
     for (auto& plane : aircraft) {
         if (plane->getState() == AircraftState::CONFLICT) {
@@ -118,11 +128,11 @@ void Engine::detectConflicts() {
         }
     }
 
-    // Check for conflicts & set state
+    //check for conflicts & set state
     for (size_t i = 0; i < aircraft.size(); i++) {
         for (size_t j = i + 1; j < aircraft.size(); j++) {
             if (aircraft[i]->collidesWith(*aircraft[j])) {
-                // Set both aircraft to conflict state
+                //set both aircraft to conflict state
                 aircraft[i]->setState(AircraftState::CONFLICT);
                 aircraft[j]->setState(AircraftState::CONFLICT);
                 

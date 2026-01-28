@@ -1,6 +1,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <cmath>
 #include "utils.h"
 #include <iostream>
 #include <fstream>
@@ -24,8 +25,6 @@ int parseJSON(string input){
     json data;
     f >> data;
 
-    // Just validating it reads
-    // cout << data.dump(4) << '\n';
     return 0;
 }
 
@@ -37,4 +36,17 @@ int centerHeight(int max_y, int obj_height)
 int centerWidth(int max_x, int obj_width)
 {
     return (max_x - obj_width) / 2;
+}
+
+float normalizeAngle(float angle) {
+    float result = fmodf(angle, 360.0f);
+    if (result < 0) result += 360.0f;
+    return result;
+}
+
+float getShortestAngleDiff(float target, float current) {
+    float diff = target - current;
+    diff = fmodf(diff + 180.0f, 360.0f);
+    if (diff < 0) diff += 360.0f;
+    return diff - 180.0f;
 }

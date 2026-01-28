@@ -1,29 +1,30 @@
 #include "Aircraft.h"
 #include "raymath.h"
 #include "../../constants/constants.h"
+#include "../../util/utils.h"
 #include <cmath> //this one is a bastard to link
+#include <algorithm>
 
 #ifndef DEG2RAD
-#define DEG2RAD (PI / 180.0f)
+#define DEG2RAD (PI / 180.0)
 #endif
 
 Aircraft::Aircraft(Vector2 startPos,
                     float initialHeading,
                     float initialSpeed,
+                    int initialAltitude,
                     const std::string &id):
                         position(startPos),
-                        velocity{0, 0},
                         heading(initialHeading),
                         targetHeading(initialHeading),
                         speed(initialSpeed),
                         targetSpeed(initialSpeed),
+                        altitude(initialAltitude),
+                        targetAltitude(initialAltitude),
                         callsign(id),
                         state(AircraftState::APPROACH),
                         selected(false) {
-                            // keep initialising target values or they recieve bs values at first update()
-                            //TODO: im stupid just add def val to header
 
-    //i love polar coordinates
     velocity.x = cos(DEG2RAD * heading) * speed;
     velocity.y = sin(DEG2RAD * heading) * speed;
 
@@ -40,27 +41,24 @@ bool Aircraft::collidesWith(const Aircraft& other) const {
 
 void Aircraft::update(float deltaTime) {
 
-    float headingDiff = targetHeading - heading; // 5 - 20 = -15
-
-    //wraparound
-    if (headingDiff > 180) headingDiff -= 360;
-    if (headingDiff < -180) headingDiff += 360;
+    float headingDiff = getShortestAngleDiff(targetHeading, heading);
 
     //smooth heading change
-    if (fabs(headingDiff) > 0.5f) { // only turns if diff >0.5 DEG (stops jittering)
+    if (fabs(headingDiff) > 0.0f) {
         float turnAmount = turnRate * deltaTime;
+        float actualTurn = std::min(turnAmount, fabsf(headingDiff));
+        
         if (headingDiff > 0) {
-            heading += turnAmount;
+            heading += actualTurn;
         } else {
-            heading -= turnAmount;
+            heading -= actualTurn;
         }
 
-        while (heading < 0) heading += 360;
-        while (heading >=360) heading -= 360;
+        heading = normalizeAngle(heading);
     }
 
     //smooth speed change
-    if (fabs(speed - targetSpeed) > 1.0f) {
+    if (fabs(speed - targetSpeed) > 0.0f) {
         if (speed < targetSpeed) {
             speed += acceleration * deltaTime;
             if (speed > targetSpeed) speed = targetSpeed; //pos.overshoot prot (i bet harry will complain)
@@ -77,6 +75,10 @@ void Aircraft::update(float deltaTime) {
     position.x += velocity.x * deltaTime;
     position.y += velocity.y * deltaTime;
 
+}
+
+void Aircraft::setHeading(float newHeading) {
+    targetHeading = normalizeAngle(newHeading);
 }
 
 void Aircraft::render() {

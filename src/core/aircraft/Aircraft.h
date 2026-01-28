@@ -22,18 +22,21 @@ private:
     float speed;
     float targetSpeed;
 
+    int altitude;
+    int targetAltitude;
+
     //properties
     std::string callsign;
     AircraftState state;
     bool selected;
 
     //constraints
-    float turnRate = 30.0f;
+    float turnRate = 3.0f;
     float acceleration = 10.0f;
 
 
 public:
-    Aircraft(Vector2 startPos, float initialHeading, float initialSpeed, const std::string& id);
+    Aircraft(Vector2 startPos, float initialHeading, float initialSpeed, int initialAltitude, const std::string& id);
 
     //TODO: move some of this to cpp when its no longer skeleton stuff
     //also clamp the values like heading and speed
@@ -41,13 +44,17 @@ public:
     //gyatters
     [[nodiscard]] Vector2 getPosition() const { return position; }
     [[nodiscard]] float getHeading() const { return heading; }
+    [[nodiscard]] float getTargetHeading() const { return targetHeading; }
     [[nodiscard]] float getSpeed() const { return speed; }
+    [[nodiscard]] float getTargetSpeed() const { return targetSpeed; }
+    [[nodiscard]] int getAltitude() const { return altitude; }
+    [[nodiscard]] int getTargetAltitude() const { return targetAltitude; }
     [[nodiscard]] std::string getCallsign() const { return callsign; }
     [[nodiscard]] AircraftState getState() const { return state; }
     [[nodiscard]] bool isSelected() const { return selected; }
 
     //sixsetters
-    void setHeading(float newHeading) { targetHeading = newHeading; }
+    void setHeading(float newHeading);
     void setSpeed(float newSpeed) { targetSpeed = newSpeed; }
     void setSelected(bool isSelected) { selected = isSelected; }
     void setState(AircraftState newState) { state = newState; }
