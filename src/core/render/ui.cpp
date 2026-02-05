@@ -2,9 +2,9 @@
 
 // IMPORTANT: dont be stupid and remove this macro like last time,
 // must be defined in exactly one .cpp file
-// to generate  implementation code for RayGui
-#define RAYGUI_IMPLEMENTATION 
-#include <raygui.h> 
+// to generate implementation code for RayGui
+#define RAYGUI_IMPLEMENTATION
+#include <raygui.h>
 #include "constants/constants.h"
 #include "util/utils.h"
 
@@ -13,9 +13,9 @@ void UI::DrawMainMenu(GameState& currentState) {
     DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK, DARKBLUE);
 
     //radar range circles in background
-    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 200, Fade(DARKGRAY, 0.3f));
-    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 400, Fade(DARKGRAY, 0.2f));
-    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 600, Fade(DARKGRAY, 0.1f));
+    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 200, Fade(DARKGRAY, 0.3));
+    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 400, Fade(DARKGRAY, 0.2));
+    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 600, Fade(DARKGRAY, 0.1));
 
     //title + shadow
     const char* title = "ATC SIMULATOR";
@@ -34,10 +34,10 @@ void UI::DrawMainMenu(GameState& currentState) {
     DrawText(subtitle, centerWidth(GetScreenWidth(), subWidth), titleY + 70, subFontSize, LIGHTGRAY);
 
     //button crap
-    int btnWidth = 200;
-    int btnHeight = 50;
-    float btnX = (float)centerWidth(GetScreenWidth(), btnWidth);
-    float btnY = (float)GetScreenHeight() * 0.6f;
+    float btnWidth = 200.0f;
+    float btnHeight = 50.0f;
+    float btnX = static_cast<float>(centerWidth(GetScreenWidth(), static_cast<int>(btnWidth)));
+    float btnY = static_cast<float>(GetScreenHeight()) * 0.6f;
 
     //GUI flags
     GuiSetStyle(BUTTON, BASE_COLOR_NORMAL, ColorToInt(DARKGRAY));
@@ -46,11 +46,11 @@ void UI::DrawMainMenu(GameState& currentState) {
     GuiSetStyle(BUTTON, TEXT_COLOR_FOCUSED, ColorToInt(WHITE));
     GuiSetStyle(BUTTON, TEXT_SIZE, 20);
 
-    if (GuiButton(Rectangle{ btnX, btnY, (float)btnWidth, (float)btnHeight }, "START MISSION")) {
+    if (GuiButton(Rectangle{ btnX, btnY, btnWidth, btnHeight }, "START MISSION")) {
         currentState = GameState::RUNNING;
     }
 
-    if (GuiButton(Rectangle{ btnX, btnY + btnHeight + 20, (float)btnWidth, (float)btnHeight }, "EXIT")) {
+    if (GuiButton(Rectangle{ btnX, btnY + btnHeight + 20.0f, btnWidth, btnHeight }, "EXIT")) {
         currentState = GameState::EXIT;
     }
 
@@ -63,12 +63,12 @@ void UI::DrawSimulationHUD(int aircraftCount, bool& debugEnabled) {
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
 
     // Debug toggle button
-    int btnWidth = 80;
-    int btnHeight = 30;
-    float btnX = (float)GetScreenWidth() - btnWidth - 10;
-    float btnY = 40;
+    float btnWidth = 80.0f;
+    float btnHeight = 30.0f;
+    float btnX = static_cast<float>(GetScreenWidth()) - btnWidth - 10.0f;
+    float btnY = static_cast<float>(GetScreenHeight()) - btnHeight - 10.0f;
 
-    if (GuiButton(Rectangle{ btnX, btnY, (float)btnWidth, (float)btnHeight }, debugEnabled ? "DEBUG: ON" : "DEBUG: OFF")) {
+    if (GuiButton(Rectangle{ btnX, btnY, btnWidth, btnHeight }, debugEnabled ? "DEBUG: ON" : "DEBUG: OFF")) {
         debugEnabled = !debugEnabled;
     }
 }
@@ -80,7 +80,7 @@ void UI::DrawBackground()
 
 void UI::DrawPauseMenu(GameState& currentState) {
     //semitransparent overlay (absolutely cooked with this one)
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.6f));
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.6));
 
     const char* text = "PAUSED";
     int fontSize = 60;
@@ -91,19 +91,18 @@ void UI::DrawPauseMenu(GameState& currentState) {
     DrawText(text, textX + 4, textY + 4, fontSize, BLACK);
     DrawText(text, textX, textY, fontSize, RAYWHITE);
 
-    int btnWidth = 200;
-    int btnHeight = 50;
-    float btnX = (float)centerWidth(GetScreenWidth(), btnWidth);
-    float btnY = (float)centerHeight(GetScreenHeight(), btnHeight);
-
+    float btnWidth = 200.0f;
+    float btnHeight = 50.0f;
+    float btnX = static_cast<float>(centerWidth(GetScreenWidth(), static_cast<int>(btnWidth)));
+    float btnY = static_cast<float>(centerHeight(GetScreenHeight(), static_cast<int>(btnHeight)));
 
     GuiSetStyle(BUTTON, TEXT_SIZE, 20);
 
-    if (GuiButton(Rectangle{ btnX, btnY, (float)btnWidth, (float)btnHeight }, "RESUME")) {
+    if (GuiButton(Rectangle{ btnX, btnY, btnWidth, btnHeight }, "RESUME")) {
         currentState = GameState::RUNNING;
     }
 
-    if (GuiButton(Rectangle{ btnX, btnY + btnHeight + 20, (float)btnWidth, (float)btnHeight }, "MAIN MENU")) {
+    if (GuiButton(Rectangle{ btnX, btnY + btnHeight + 20.0f, btnWidth, btnHeight }, "MAIN MENU")) {
         currentState = GameState::MENU;
     }
 }

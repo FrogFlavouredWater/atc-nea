@@ -20,13 +20,13 @@ const Constants CONSTANTS = []() {
     };
     
     GameSettings game{
-        data["game"]["AIRCRAFT_SPEED"].get<float>(),
+        data["game"]["AIRCRAFT_SPEED"].get<double>(),
         data["game"]["MAX_AIRCRAFT"].get<int32_t>(),
         data["game"]["AIRCRAFT_SIZE"].get<int32_t>()
     };
     
     AudioSettings audio{
-        data["audio"]["MASTER_VOLUME"].get<float>(),
+        data["audio"]["MASTER_VOLUME"].get<double>(),
         data["audio"]["EFFECTS_ENABLED"].get<bool>()
     };
     

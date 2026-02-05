@@ -14,7 +14,7 @@ struct DisplaySettings
 
 struct GameSettings
 {
-    const float AIRCRAFT_SPEED;
+    const double AIRCRAFT_SPEED;
     const int32_t MAX_AIRCRAFT;
     const int32_t AIRCRAFT_SIZE;
 };
@@ -30,7 +30,7 @@ enum class GameState
 
 struct AudioSettings
 {
-    const float MASTER_VOLUME;
+    const double MASTER_VOLUME;
     const bool EFFECTS_ENABLED;
 };
 

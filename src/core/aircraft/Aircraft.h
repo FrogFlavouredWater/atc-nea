@@ -16,11 +16,11 @@ private:
     Vector2 velocity;
 
     //primary controls
-    float heading;
-    float targetHeading;
+    double heading;
+    double targetHeading;
 
-    float speed;
-    float targetSpeed;
+    double speed;
+    double targetSpeed;
 
     int altitude;
     int targetAltitude;
@@ -31,22 +31,22 @@ private:
     bool selected;
 
     //constraints
-    float turnRate = 3.0f;
-    float acceleration = 10.0f;
+    double turnRate = 3.0;
+    double acceleration = 10.0;
 
 
 public:
-    Aircraft(Vector2 startPos, float initialHeading, float initialSpeed, int initialAltitude, const std::string& id);
+    Aircraft(Vector2 startPos, double initialHeading, double initialSpeed, int initialAltitude, const std::string& id);
 
     //TODO: move some of this to cpp when its no longer skeleton stuff
     //also clamp the values like heading and speed
 
     //gyatters
     [[nodiscard]] Vector2 getPosition() const { return position; }
-    [[nodiscard]] float getHeading() const { return heading; }
-    [[nodiscard]] float getTargetHeading() const { return targetHeading; }
-    [[nodiscard]] float getSpeed() const { return speed; }
-    [[nodiscard]] float getTargetSpeed() const { return targetSpeed; }
+    [[nodiscard]] double getHeading() const { return heading; }
+    [[nodiscard]] double getTargetHeading() const { return targetHeading; }
+    [[nodiscard]] double getSpeed() const { return speed; }
+    [[nodiscard]] double getTargetSpeed() const { return targetSpeed; }
     [[nodiscard]] int getAltitude() const { return altitude; }
     [[nodiscard]] int getTargetAltitude() const { return targetAltitude; }
     [[nodiscard]] std::string getCallsign() const { return callsign; }
@@ -54,15 +54,17 @@ public:
     [[nodiscard]] bool isSelected() const { return selected; }
 
     //sixsetters
-    void setHeading(float newHeading);
-    void setSpeed(float newSpeed) { targetSpeed = newSpeed; }
+    void setHeading(double newHeading);
+    void setSpeed(double newSpeed) { targetSpeed = newSpeed; }
     void setSelected(bool isSelected) { selected = isSelected; }
     void setState(AircraftState newState) { state = newState; }
 
     //funky shit
-    [[nodiscard]] float distanceTo(const Aircraft& other) const;
+    [[nodiscard]] double distanceTo(const Aircraft& other) const;
     [[nodiscard]] bool collidesWith(const Aircraft& other) const;
 
-    void update(float deltaTime);
+    void update(double deltaTime);
     void render();
+
+    static std::string stateToString(AircraftState state);
 };

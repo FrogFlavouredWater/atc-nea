@@ -38,15 +38,15 @@ int centerWidth(int max_x, int obj_width)
     return (max_x - obj_width) / 2;
 }
 
-float normalizeAngle(float angle) {
-    float result = fmodf(angle, 360.0f);
-    if (result < 0) result += 360.0f;
+double normalizeAngle(double angle) {
+    double result = fmodf(angle, 360.0);
+    if (result < 0) result += 360.0;
     return result;
 }
 
-float getShortestAngleDiff(float target, float current) {
-    float diff = target - current;
-    diff = fmodf(diff + 180.0f, 360.0f);
-    if (diff < 0) diff += 360.0f;
-    return diff - 180.0f;
+double getShortestAngleDiff(double target, double current) {
+    double diff = target - current;
+    diff = fmodf(diff + 180.0, 360.0);
+    if (diff < 0) diff += 360.0;
+    return diff - 180.0;
 }

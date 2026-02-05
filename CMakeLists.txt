@@ -23,6 +23,8 @@ add_executable(atc
         src/logger/logger.cpp
         src/core/aircraft/Aircraft.cpp
         src/core/aircraft/Aircraft.h
+        src/core/world/airport.h
+        src/core/world/airport.cpp
 )
 
 target_include_directories(atc PRIVATE

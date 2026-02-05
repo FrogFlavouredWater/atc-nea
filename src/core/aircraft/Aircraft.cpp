@@ -10,8 +10,8 @@
 #endif
 
 Aircraft::Aircraft(Vector2 startPos,
-                    float initialHeading,
-                    float initialSpeed,
+                    double initialHeading,
+                    double initialSpeed,
                     int initialAltitude,
                     const std::string &id):
                         position(startPos),
@@ -25,29 +25,29 @@ Aircraft::Aircraft(Vector2 startPos,
                         state(AircraftState::APPROACH),
                         selected(false) {
 
-    velocity.x = cos(DEG2RAD * heading) * speed;
-    velocity.y = sin(DEG2RAD * heading) * speed;
+    velocity.x = cos(DEG2RAD * (heading - 90.0)) * speed;
+    velocity.y = sin(DEG2RAD * (heading - 90.0)) * speed;
 
 }
 
-float Aircraft::distanceTo(const Aircraft& other) const {
+double Aircraft::distanceTo(const Aircraft& other) const {
     return Vector2Distance(position, other.position);
 }
 
 bool Aircraft::collidesWith(const Aircraft& other) const {
-    return distanceTo(other) < 40.0f;  //40px collision radius (random magic number) TODO: Add to config
+    return distanceTo(other) < 40.0;  //40px collision radius (random magic number) TODO: Add to config
 }
 
 
-void Aircraft::update(float deltaTime) {
+void Aircraft::update(double deltaTime) {
 
-    float headingDiff = getShortestAngleDiff(targetHeading, heading);
+    double headingDiff = getShortestAngleDiff(targetHeading, heading);
 
     //smooth heading change
-    if (fabs(headingDiff) > 0.0f) {
-        float turnAmount = turnRate * deltaTime;
-        float actualTurn = std::min(turnAmount, fabsf(headingDiff));
-        
+    if (fabs(headingDiff) > 0.0) {
+        double turnAmount = turnRate * deltaTime;
+        double actualTurn = std::min(turnAmount, std::abs(headingDiff));
+
         if (headingDiff > 0) {
             heading += actualTurn;
         } else {
@@ -58,7 +58,7 @@ void Aircraft::update(float deltaTime) {
     }
 
     //smooth speed change
-    if (fabs(speed - targetSpeed) > 0.0f) {
+    if (fabs(speed - targetSpeed) > 0.0) {
         if (speed < targetSpeed) {
             speed += acceleration * deltaTime;
             if (speed > targetSpeed) speed = targetSpeed; //pos.overshoot prot (i bet harry will complain)
@@ -69,15 +69,15 @@ void Aircraft::update(float deltaTime) {
     }
 
     //poolar cooordinates
-    velocity.x = cos(DEG2RAD * heading) * speed;
-    velocity.y = sin(DEG2RAD * heading) * speed;
+    velocity.x = cos(DEG2RAD * (heading - 90.0)) * speed;
+    velocity.y = sin(DEG2RAD * (heading - 90.0)) * speed;
 
     position.x += velocity.x * deltaTime;
     position.y += velocity.y * deltaTime;
 
 }
 
-void Aircraft::setHeading(float newHeading) {
+void Aircraft::setHeading(double newHeading) {
     targetHeading = normalizeAngle(newHeading);
 }
 
@@ -88,27 +88,41 @@ void Aircraft::render() {
 
     const int size = CONSTANTS.game.AIRCRAFT_SIZE;
     const int halfSize = size / 2;
-    
-    // Center the square on the aircraft position
+
+
     DrawRectangleLinesEx(
-        Rectangle{position.x - halfSize, position.y - halfSize, (float)size, (float)size},
-        1.5f,  // Line thickness for better visibility
+        Rectangle{
+            position.x - static_cast<float>(halfSize),
+            position.y - static_cast<float>(halfSize),
+            static_cast<float>(size),
+            static_cast<float>(size)
+        },
+        1.5f,  // Line thickness
         aircraftColor
     );
 
-
     const float vectorLength = 40.0f;
     Vector2 vectorEnd = {
-        position.x + cos(DEG2RAD * heading) * vectorLength,
-        position.y + sin(DEG2RAD * heading) * vectorLength
+        position.x + static_cast<float>(std::cos(DEG2RAD * (heading - 90.0)) * vectorLength),
+        position.y + static_cast<float>(std::sin(DEG2RAD * (heading - 90.0)) * vectorLength)
     };
 
     DrawLineEx(position, vectorEnd, 2.0f, aircraftColor);
 
     DrawText(callsign.c_str(), (int)(position.x + 20), (int)(position.y - 12), 14, WHITE); //callsign
-    
+
     if (selected) {
         DrawCircleLinesV(position, 25.0f, YELLOW);
     }
+}
 
+std::string Aircraft::stateToString(AircraftState state) {
+    switch (state) {
+        case AircraftState::APPROACH: return "APPROACH";
+        case AircraftState::VECTORING: return "VECTORING";
+        case AircraftState::ON_FINAL: return "ON_FINAL";
+        case AircraftState::LANDING: return "LANDING";
+        case AircraftState::CONFLICT: return "CONFLICT";
+        default: return "UNKNOWN";
+    }
 }

@@ -26,7 +26,7 @@ void Engine::constructWindow() {
     SetTargetFPS(CONSTANTS.display.TARGET_FPS);
 }
 
-void Engine::updateSimulation(float deltaTime) {
+void Engine::updateSimulation(double deltaTime) {
     handleInput();
 
     for (auto& plane : aircraft) {
@@ -38,6 +38,10 @@ void Engine::updateSimulation(float deltaTime) {
 
 void Engine::renderSimulation() {
     ui.DrawBackground();
+
+    for (const auto& airport : airports) {
+        airport.render();
+    }
 
     for (auto& plane : aircraft) {
         plane->render();
@@ -57,6 +61,7 @@ void Engine::renderSimulation() {
             DrawText(TextFormat("Heading: %.2f (Target: %.2f)", selectedAircraft->getHeading(), selectedAircraft->getTargetHeading()), 10, startY + 40, 16, GREEN);
             DrawText(TextFormat("Speed: %.2f (Target: %.2f)", selectedAircraft->getSpeed(), selectedAircraft->getTargetSpeed()), 10, startY + 60, 16, GREEN);
             DrawText(TextFormat("Altitude: %i (Target: %i)", selectedAircraft->getAltitude(), selectedAircraft->getTargetAltitude()), 10, startY + 80, 16, GREEN);
+            DrawText(TextFormat("State: %s", Aircraft::stateToString(selectedAircraft->getState()).c_str()), 10, startY + 100, 16, GREEN);
         }
     } else {
         DrawText("Click aircraft to vector", 10, 40, 20, WHITE);  // Increased font size
@@ -108,15 +113,15 @@ void Engine::handleInput() {
 void Engine::spawnAircraft() {
     //TODO: TEMPORARY <REMOVE THIS>
     aircraft.push_back(std::make_unique<Aircraft>(
-        Vector2{100, 200}, 90.0f, 5.0f, 3000, "AA123"
+        Vector2{100, 200}, 180.0f, 5.0f, 3000, "AA123"
     ));
 
     aircraft.push_back(std::make_unique<Aircraft>(
-        Vector2{300, 400}, 270.0f, 6.0f, 3500, "BA456"
+        Vector2{300, 400}, 0.0f, 6.0f, 3500, "BA456"
     ));
 
     aircraft.push_back(std::make_unique<Aircraft>(
-        Vector2{500, 100}, 180.0f, 5.5f, 3200, "UA789"
+        Vector2{500, 100}, 270.0f, 5.5f, 3200, "UA789"
     ));
 }
 
@@ -146,10 +151,11 @@ void Engine::detectConflicts() const {
 
 void Engine::init() {
     constructWindow();
+    airports.push_back({"LHR",{400, 300}, 90.0f});
     spawnAircraft();
 }
 
-void Engine::update(float deltaTime) {
+void Engine::update(double deltaTime) {
     //toggle state for testing
     if (IsKeyPressed(KEY_P)) {
         if (currentState == GameState::RUNNING) currentState = GameState::PAUSED;
@@ -160,7 +166,6 @@ void Engine::update(float deltaTime) {
     if (currentState == GameState::RUNNING) {
         updateSimulation(deltaTime);
     }
-
 }
 
 void Engine::render() {
@@ -194,7 +199,7 @@ void Engine::render() {
 
 void Engine::run() {
     while (!shouldClose()) {
-        float deltaTime = GetFrameTime();
+        double deltaTime = static_cast<double>(GetFrameTime());
         update(deltaTime);
         render();
     }
