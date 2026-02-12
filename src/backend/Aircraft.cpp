@@ -1,15 +1,18 @@
-#include "Aircraft.h"
-#include "raymath.h"
-#include "../../constants/constants.h"
-#include "../../util/utils.h"
-#include <cmath> //this one is a bastard to link
+#include "backend/Aircraft.h"
+#include "common/constants.h"
+#include "common/utils.h"
+#include <cmath>
 #include <algorithm>
+
+#ifndef PI
+#define PI 3.14159265358979323846
+#endif
 
 #ifndef DEG2RAD
 #define DEG2RAD (PI / 180.0)
 #endif
 
-Aircraft::Aircraft(Vector2 startPos,
+Aircraft::Aircraft(Vec2 startPos,
                     double initialHeading,
                     double initialSpeed,
                     int initialAltitude,
@@ -25,17 +28,21 @@ Aircraft::Aircraft(Vector2 startPos,
                         state(AircraftState::APPROACH),
                         selected(false) {
 
-    velocity.x = cos(DEG2RAD * (heading - 90.0)) * speed;
-    velocity.y = sin(DEG2RAD * (heading - 90.0)) * speed;
+    // Velocity in NM per hour
+    double speedInNmPerSec = speed / 3600.0;
+    velocity.x = cos(DEG2RAD * (heading - 90.0)) * speedInNmPerSec;
+    velocity.y = sin(DEG2RAD * (heading - 90.0)) * speedInNmPerSec;
 
 }
 
 double Aircraft::distanceTo(const Aircraft& other) const {
-    return Vector2Distance(position, other.position);
+    double dx = position.x - other.position.x;
+    double dy = position.y - other.position.y;
+    return std::sqrt(dx*dx + dy*dy);
 }
 
 bool Aircraft::collidesWith(const Aircraft& other) const {
-    return distanceTo(other) < 40.0;  //40px collision radius (random magic number) TODO: Add to config
+    return distanceTo(other) < 3.0;  // 3.0 NM collision radius
 }
 
 
@@ -68,9 +75,10 @@ void Aircraft::update(double deltaTime) {
         }
     }
 
-    //poolar cooordinates
-    velocity.x = cos(DEG2RAD * (heading - 90.0)) * speed;
-    velocity.y = sin(DEG2RAD * (heading - 90.0)) * speed;
+    // Velocity in NM per hour, deltaTime is in seconds, so divide by 3600
+    double speedInNmPerSec = speed / 3600.0;
+    velocity.x = cos(DEG2RAD * (heading - 90.0)) * speedInNmPerSec;
+    velocity.y = sin(DEG2RAD * (heading - 90.0)) * speedInNmPerSec;
 
     position.x += velocity.x * deltaTime;
     position.y += velocity.y * deltaTime;
@@ -79,41 +87,6 @@ void Aircraft::update(double deltaTime) {
 
 void Aircraft::setHeading(double newHeading) {
     targetHeading = normalizeAngle(newHeading);
-}
-
-void Aircraft::render() {
-    auto aircraftColor = WHITE;
-    if (selected) aircraftColor = YELLOW;
-    if (state == AircraftState::CONFLICT) aircraftColor = RED;
-
-    const int size = CONSTANTS.game.AIRCRAFT_SIZE;
-    const int halfSize = size / 2;
-
-
-    DrawRectangleLinesEx(
-        Rectangle{
-            position.x - static_cast<float>(halfSize),
-            position.y - static_cast<float>(halfSize),
-            static_cast<float>(size),
-            static_cast<float>(size)
-        },
-        1.5f,  // Line thickness
-        aircraftColor
-    );
-
-    const float vectorLength = 40.0f;
-    Vector2 vectorEnd = {
-        position.x + static_cast<float>(std::cos(DEG2RAD * (heading - 90.0)) * vectorLength),
-        position.y + static_cast<float>(std::sin(DEG2RAD * (heading - 90.0)) * vectorLength)
-    };
-
-    DrawLineEx(position, vectorEnd, 2.0f, aircraftColor);
-
-    DrawText(callsign.c_str(), (int)(position.x + 20), (int)(position.y - 12), 14, WHITE); //callsign
-
-    if (selected) {
-        DrawCircleLinesV(position, 25.0f, YELLOW);
-    }
 }
 
 std::string Aircraft::stateToString(AircraftState state) {

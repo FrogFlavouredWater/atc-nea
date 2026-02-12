@@ -1,4 +1,4 @@
-#include "constants.h"
+#include "common/constants.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 
@@ -22,7 +22,8 @@ const Constants CONSTANTS = []() {
     GameSettings game{
         data["game"]["AIRCRAFT_SPEED"].get<double>(),
         data["game"]["MAX_AIRCRAFT"].get<int32_t>(),
-        data["game"]["AIRCRAFT_SIZE"].get<int32_t>()
+        data["game"]["AIRCRAFT_SIZE"].get<int32_t>(),
+        data["game"]["PIXELS_PER_NM"].get<double>()
     };
     
     AudioSettings audio{

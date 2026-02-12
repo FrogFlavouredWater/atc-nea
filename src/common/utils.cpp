@@ -2,7 +2,7 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cmath>
-#include "utils.h"
+#include "common/utils.h"
 #include <iostream>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -39,14 +39,14 @@ int centerWidth(int max_x, int obj_width)
 }
 
 double normalizeAngle(double angle) {
-    double result = fmodf(angle, 360.0);
+    double result = fmod(angle, 360.0);
     if (result < 0) result += 360.0;
     return result;
 }
 
 double getShortestAngleDiff(double target, double current) {
     double diff = target - current;
-    diff = fmodf(diff + 180.0, 360.0);
+    diff = fmod(diff + 180.0, 360.0);
     if (diff < 0) diff += 360.0;
     return diff - 180.0;
 }

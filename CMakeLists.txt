@@ -15,16 +15,19 @@ find_package(raylib REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
 add_executable(atc
-        src/main.cpp
-        src/core/engine/engine.cpp
-        src/core/render/ui.cpp
-        src/constants/constants.cpp
-        src/util/utils.cpp
-        src/logger/logger.cpp
-        src/core/aircraft/Aircraft.cpp
-        src/core/aircraft/Aircraft.h
-        src/core/world/airport.h
-        src/core/world/airport.cpp
+        src/app/main.cpp
+        src/app/engine.cpp
+        src/frontend/ui.cpp
+        src/common/constants.cpp
+        src/common/utils.cpp
+        src/common/logger.cpp
+        src/backend/Aircraft.cpp
+        src/backend/Aircraft.h
+        src/backend/airport.h
+        src/backend/airport.cpp
+        src/backend/Simulation.cpp
+        src/backend/Simulation.h
+        src/app/main.cpp
 )
 
 target_include_directories(atc PRIVATE

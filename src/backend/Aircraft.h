@@ -1,6 +1,6 @@
 #pragma once
-#include <raylib.h>
 #include <string>
+#include "common/utils.h"
 
 enum class AircraftState {
     APPROACH,
@@ -12,8 +12,8 @@ enum class AircraftState {
 
 class Aircraft {
 private:
-    Vector2 position;
-    Vector2 velocity;
+    Vec2 position;
+    Vec2 velocity;
 
     //primary controls
     double heading;
@@ -31,18 +31,18 @@ private:
     bool selected;
 
     //constraints
-    double turnRate = 3.0;
-    double acceleration = 10.0;
+    double turnRate = 3.0; //deg/s
+    double acceleration = 2.0; //kts/s
 
 
 public:
-    Aircraft(Vector2 startPos, double initialHeading, double initialSpeed, int initialAltitude, const std::string& id);
+    Aircraft(Vec2 startPos, double initialHeading, double initialSpeed, int initialAltitude, const std::string& id);
 
     //TODO: move some of this to cpp when its no longer skeleton stuff
     //also clamp the values like heading and speed
 
     //gyatters
-    [[nodiscard]] Vector2 getPosition() const { return position; }
+    [[nodiscard]] Vec2 getPosition() const { return position; }
     [[nodiscard]] double getHeading() const { return heading; }
     [[nodiscard]] double getTargetHeading() const { return targetHeading; }
     [[nodiscard]] double getSpeed() const { return speed; }
@@ -64,7 +64,6 @@ public:
     [[nodiscard]] bool collidesWith(const Aircraft& other) const;
 
     void update(double deltaTime);
-    void render();
 
     static std::string stateToString(AircraftState state);
 };
