@@ -47,7 +47,14 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(atc PRIVATE /W4 /Zc:__cplusplus)
 endif()
 
-#runtime data available @ src/data/ relative to the executable working dir or sm idk
+# Ensure constants.json is copied whenever it changes
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/data/constants.json"
+    "${CMAKE_CURRENT_BINARY_DIR}/src/data/constants.json"
+    COPYONLY
+)
+
+# Also copy to the executable directory to be safe (for IDEs)
 add_custom_command(TARGET atc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_FILE_DIR:atc>/src/data"

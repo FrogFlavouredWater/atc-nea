@@ -5,9 +5,21 @@
 using json = nlohmann::json;
 
 const Constants CONSTANTS = []() {
-    std::ifstream f("src/data/constants.json");
+    // Try to find the constants file in several locations
+    std::vector<std::string> searchPaths = {
+        "src/data/constants.json",             // Relative to project root
+        "../src/data/constants.json",          // Relative to build dir
+        "./src/data/constants.json"            // Relative to current dir
+    };
+
+    std::ifstream f;
+    for (const auto& path : searchPaths) {
+        f.open(path);
+        if (f.is_open()) break;
+    }
+
     if (!f.is_open()) {
-        throw std::runtime_error("Failed to open constants.json");
+        throw std::runtime_error("Failed to open constants.json from any search path");
     }
     
     json data = json::parse(f);
@@ -20,10 +32,10 @@ const Constants CONSTANTS = []() {
     };
     
     GameSettings game{
-        data["game"]["AIRCRAFT_SPEED"].get<double>(),
         data["game"]["MAX_AIRCRAFT"].get<int32_t>(),
         data["game"]["AIRCRAFT_SIZE"].get<int32_t>(),
-        data["game"]["PIXELS_PER_NM"].get<double>()
+        data["game"]["PIXELS_PER_NM"].get<double>(),
+        data["game"]["SIMULATION_SPEED"].get<double>()
     };
     
     AudioSettings audio{

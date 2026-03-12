@@ -14,10 +14,10 @@ struct DisplaySettings
 
 struct GameSettings
 {
-    const double AIRCRAFT_SPEED;
     const int32_t MAX_AIRCRAFT;
     const int32_t AIRCRAFT_SIZE;
     const double PIXELS_PER_NM;
+    const double SIMULATION_SPEED;
 };
 
 enum class GameState

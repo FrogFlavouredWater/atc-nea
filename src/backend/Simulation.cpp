@@ -3,6 +3,8 @@
 #include <cmath>
 #include <algorithm>
 
+#include "common/constants.h"
+
 Simulation::Simulation() {}
 
 void Simulation::update(double deltaTime) {
@@ -12,12 +14,20 @@ void Simulation::update(double deltaTime) {
     detectConflicts();
 }
 
-void Simulation::spawnAircraft(Vec2 pos, double heading, double speed, int altitude, const std::string& callsign) {
+bool Simulation::spawnAircraft(Vec2 pos, double heading, double speed, int altitude, const std::string& callsign) {
+    if (!canSpawnMore()) {
+        return false;
+    }
     aircraft.push_back(std::make_unique<Aircraft>(pos, heading, speed, altitude, callsign));
+    return true;
 }
 
 void Simulation::addAirport(const Airport& airport) {
     airports.push_back(airport);
+}
+
+bool Simulation::canSpawnMore() const {
+    return aircraft.size() < CONSTANTS.game.MAX_AIRCRAFT;
 }
 
 void Simulation::detectConflicts() {

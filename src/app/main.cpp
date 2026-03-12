@@ -1,10 +1,12 @@
 #include "app/engine.h"
 
-int main()
-{
+int main() {
+
     Engine& engine = Engine::getInstance();
     engine.init();
     engine.run();
 
     return 0;
+
+
 }

@@ -14,12 +14,15 @@ private:
 public:
     Simulation();
     void update(double deltaTime);
-    void spawnAircraft(Vec2 pos, double heading, double speed, int altitude, const std::string& callsign);
+    bool spawnAircraft(Vec2 pos, double heading, double speed, int altitude, const std::string& callsign);
     void addAirport(const Airport& airport);
     void detectConflicts();
 
     const std::vector<std::unique_ptr<Aircraft>>& getAircraft() const { return aircraft; }
     const std::vector<Airport>& getAirports() const { return airports; }
+
+    size_t getAircraftCount() const { return aircraft.size(); }
+    bool canSpawnMore() const;
     
     Aircraft* getAircraftAt(Vec2 pos, double radius);
 };

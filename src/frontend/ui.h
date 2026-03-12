@@ -11,7 +11,8 @@ public:
     void DrawSimulationHUD(int aircraftCount, bool& debugEnabled);
     void DrawPauseMenu(GameState& currentState);
     void DrawBackground();
-    
+    void DrawRangeRings(Vec2 airportPos);
+
     void DrawSimulation(const Simulation& sim, bool debugEnabled, Aircraft* selectedAircraft);
     
     // Units conversion

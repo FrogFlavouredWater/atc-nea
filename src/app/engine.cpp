@@ -57,14 +57,14 @@ void Engine::handleInput() {
 }
 
 void Engine::spawnAircraft() {
-    sim.spawnAircraft({10.0, 20.0}, 180.0, 210.0, 3000, "AA123");
-    sim.spawnAircraft({30.0, 40.0}, 0.0, 250.0, 3500, "BA456");
-    sim.spawnAircraft({50.0, 10.0}, 270.0, 180.0, 3200, "UA789");
+    sim.spawnAircraft({-30.0, -20.0}, 135.0, 210.0, 3000, "AA123");
+    sim.spawnAircraft({40.0, 30.0}, 225.0, 250.0, 3500, "BA456");
+    sim.spawnAircraft({-10.0, 40.0}, 45.0, 180.0, 3200, "UA789");
 }
 
 void Engine::init() {
     constructWindow();
-    sim.addAirport({"LHR",{40.0, 30.0}, 90.0});
+    sim.addAirport({"LHR",{0.0, 0.0}, 90.0});
     spawnAircraft();
 }
 
@@ -76,7 +76,8 @@ void Engine::update(double deltaTime) {
 
     if (currentState == GameState::RUNNING) {
         handleInput();
-        sim.update(deltaTime);
+        double scaledDeltaTime = deltaTime * CONSTANTS.game.SIMULATION_SPEED;
+        sim.update(scaledDeltaTime);
     }
 }
 
@@ -112,6 +113,7 @@ void Engine::run() {
     while (!shouldClose()) {
         double deltaTime = static_cast<double>(GetFrameTime());
         update(deltaTime);
+        // std::cout << sim.getAircraft().size();
         render();
     }
     CloseWindow();

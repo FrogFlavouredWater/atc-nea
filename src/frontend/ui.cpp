@@ -66,7 +66,7 @@ void UI::DrawMainMenu(GameState& currentState) {
 void UI::DrawSimulationHUD(int aircraftCount, bool& debugEnabled) {
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
-
+    DrawText(TextFormat("SimSpeed: %.0f", CONSTANTS.game.SIMULATION_SPEED), GetScreenWidth() - 130, 40, 20, WHITE);
     // Debug toggle button
     double btnWidth = 80.0;
     double btnHeight = 30.0;
@@ -81,6 +81,23 @@ void UI::DrawSimulationHUD(int aircraftCount, bool& debugEnabled) {
 void UI::DrawBackground()
 {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK);
+}
+
+void UI::DrawRangeRings(Vec2 airportPos)
+{
+    // Standard approach distances
+    float rings[] = { 5.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f };
+
+    for (float radiusNm : rings) {
+        Vector2 center = NMToPixels(airportPos);
+        float pixelRadius = (float)NMToPixels(radiusNm);
+
+        // Draw a faint dashed or solid circle
+        DrawCircleLinesV(center, pixelRadius, Fade(DARKGRAY, 0.9f));
+
+        // Label the ring (optional)
+        DrawText(TextFormat("%0.f NM", radiusNm), (int)center.x + 5, (int)(center.y - pixelRadius - 15), 12, DARKGRAY);
+    }
 }
 
 void UI::DrawPauseMenu(GameState& currentState) {
@@ -114,8 +131,8 @@ void UI::DrawPauseMenu(GameState& currentState) {
 
 Vector2 UI::NMToPixels(Vec2 nmPos) {
     return Vector2{
-        (float)(nmPos.x * CONSTANTS.game.PIXELS_PER_NM),
-        (float)(nmPos.y * CONSTANTS.game.PIXELS_PER_NM)
+        (float)(GetScreenWidth() / 2 + nmPos.x * CONSTANTS.game.PIXELS_PER_NM),
+        (float)(GetScreenHeight() / 2 + nmPos.y * CONSTANTS.game.PIXELS_PER_NM)
     };
 }
 
@@ -125,8 +142,8 @@ double UI::NMToPixels(double nmDistance) {
 
 Vec2 UI::PixelsToNM(Vector2 pixelPos) {
     return Vec2{
-        (double)pixelPos.x / CONSTANTS.game.PIXELS_PER_NM,
-        (double)pixelPos.y / CONSTANTS.game.PIXELS_PER_NM
+        (double)(pixelPos.x - GetScreenWidth() / 2) / CONSTANTS.game.PIXELS_PER_NM,
+        (double)(pixelPos.y - GetScreenHeight() / 2) / CONSTANTS.game.PIXELS_PER_NM
     };
 }
 
@@ -135,6 +152,7 @@ void UI::DrawSimulation(const Simulation& sim, bool debugEnabled, Aircraft* sele
 
     for (const auto& airport : sim.getAirports()) {
         DrawAirport(airport);
+        DrawRangeRings(airport.position);
     }
 
     for (const auto& plane : sim.getAircraft()) {
@@ -142,6 +160,7 @@ void UI::DrawSimulation(const Simulation& sim, bool debugEnabled, Aircraft* sele
     }
 
     DrawSimulationHUD((int)sim.getAircraft().size(), debugEnabled);
+
 
     if (selectedAircraft) {
         DrawText("Selected: ", 10, 40, 20, WHITE);
@@ -206,7 +225,14 @@ void UI::DrawAirport(const Airport& airport) {
     DrawRectanglePro(rec, origin, (float)(airport.runwayHeading - 90.0), GRAY); // Input must take float
 
     double approachAngle = (airport.runwayHeading + 90.0) * DEG2RAD;
-    float pixelLocaliserLength = (float)NMToPixels(airport.localiserLength);
+    float approachAngleDeg = (float)(airport.runwayHeading + 90.0);
+    float pixelLocaliserLength = (float)NMToPixels(airport.localizer.length);
+
+    // Draw localizer availability cones from airport data
+    for (const auto& sector : airport.localizer.sectors) {
+        float halfWidth = (float)(sector.width / 2.0);
+        DrawCircleSector(pixelPos, (float)NMToPixels(sector.range), approachAngleDeg - halfWidth, approachAngleDeg + halfWidth, 60, Fade(GREEN, 0.1f));
+    }
 
     Vector2 localizerEnd = {
         (float)(pixelPos.x + cos(approachAngle) * pixelLocaliserLength), // Input must take float
