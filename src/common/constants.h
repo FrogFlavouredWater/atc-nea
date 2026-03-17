@@ -4,18 +4,18 @@
 
 struct DisplaySettings
 {
-    const int32_t SCREEN_WIDTH;
-    const int32_t SCREEN_HEIGHT;
-    const bool FULLSCREEN;
+    static constexpr int32_t SCREEN_WIDTH = 1280;
+    static constexpr int32_t SCREEN_HEIGHT = 720;
+    bool FULLSCREEN;
     const int32_t TARGET_FPS;
     const int HALF_WIDTH = SCREEN_WIDTH / 2;
-    const int HALF_HEIGHT = SCREEN_HEIGHT / 2;
+    static constexpr int HALF_HEIGHT = SCREEN_HEIGHT / 2;
 };
 
 struct GameSettings
 {
-    const int32_t MAX_AIRCRAFT;
-    const int32_t AIRCRAFT_SIZE;
+    static constexpr int32_t MAX_AIRCRAFT = 5;
+    static constexpr int32_t AIRCRAFT_SIZE = 12;
     const double PIXELS_PER_NM;
     const double SIMULATION_SPEED;
 };
