@@ -1,32 +1,11 @@
 #include <iostream>
-#include <nlohmann/json.hpp>
 #include <fstream>
 #include <cmath>
 #include "common/utils.h"
 #include <iostream>
 #include <fstream>
-#include <nlohmann/json.hpp>
 
-using json = nlohmann::json;
 using std::cout, std::string;
-
-int parseJSON(string input){
-    std::ifstream f(input);
-
-    if (input.empty()) {
-        return -1;
-    }
-
-    if (!f.is_open()) {
-        cout << "Could not open the file: " << input << '\n';
-        return -1;
-    }
-
-    json data;
-    f >> data;
-
-    return 0;
-}
 
 int centerHeight(int max_y, int obj_height)
 {
@@ -50,3 +29,4 @@ double getShortestAngleDiff(double target, double current) {
     if (diff < 0) diff += 360.0;
     return diff - 180.0;
 }
+

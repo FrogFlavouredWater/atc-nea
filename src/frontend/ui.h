@@ -13,7 +13,7 @@ public:
     void DrawBackground();
     void DrawRangeRings(Vec2 airportPos);
 
-    void DrawSimulation(const Simulation& sim, bool debugEnabled, Aircraft* selectedAircraft);
+    void DrawSimulation(const Simulation& sim, bool& debugEnabled, Aircraft* selectedAircraft);
     
     // Units conversion
     static Vector2 NMToPixels(Vec2 nmPos);

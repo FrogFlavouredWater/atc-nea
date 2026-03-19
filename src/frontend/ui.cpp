@@ -66,7 +66,7 @@ void UI::DrawMainMenu(GameState& currentState) {
 void UI::DrawSimulationHUD(int aircraftCount, bool& debugEnabled) {
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
-    DrawText(TextFormat("SimSpeed: %.0f", CONSTANTS.game.SIMULATION_SPEED), GetScreenWidth() - 130, 40, 20, WHITE);
+    DrawText(TextFormat("SimSpeed: %.0f", SimConfig::SIMULATION_SPEED), GetScreenWidth() - 130, 40, 20, WHITE);
     // Debug toggle button
     double btnWidth = 80.0;
     double btnHeight = 30.0;
@@ -131,23 +131,23 @@ void UI::DrawPauseMenu(GameState& currentState) {
 
 Vector2 UI::NMToPixels(Vec2 nmPos) {
     return Vector2{
-        (float)(GetScreenWidth() / 2 + nmPos.x * CONSTANTS.game.PIXELS_PER_NM),
-        (float)(GetScreenHeight() / 2 + nmPos.y * CONSTANTS.game.PIXELS_PER_NM)
+        (float)(GetScreenWidth() / 2 + nmPos.x * SimConfig::PIXELS_PER_NM),
+        (float)(GetScreenHeight() / 2 + nmPos.y * SimConfig::PIXELS_PER_NM)
     };
 }
 
 double UI::NMToPixels(double nmDistance) {
-    return nmDistance * CONSTANTS.game.PIXELS_PER_NM;
+    return nmDistance * SimConfig::PIXELS_PER_NM;
 }
 
 Vec2 UI::PixelsToNM(Vector2 pixelPos) {
     return Vec2{
-        (double)(pixelPos.x - GetScreenWidth() / 2) / CONSTANTS.game.PIXELS_PER_NM,
-        (double)(pixelPos.y - GetScreenHeight() / 2) / CONSTANTS.game.PIXELS_PER_NM
+        (double)(pixelPos.x - GetScreenWidth() / 2) / SimConfig::PIXELS_PER_NM,
+        (double)(pixelPos.y - GetScreenHeight() / 2) / SimConfig::PIXELS_PER_NM
     };
 }
 
-void UI::DrawSimulation(const Simulation& sim, bool debugEnabled, Aircraft* selectedAircraft) {
+void UI::DrawSimulation(const Simulation& sim, bool& debugEnabled, Aircraft* selectedAircraft) {
     DrawBackground();
 
     for (const auto& airport : sim.getAirports()) {
@@ -186,7 +186,7 @@ void UI::DrawAircraft(const Aircraft& aircraft, bool debugEnabled, bool selected
     if (selected) aircraftColor = YELLOW;
     if (aircraft.getState() == AircraftState::CONFLICT) aircraftColor = RED;
 
-    const int size = CONSTANTS.game.AIRCRAFT_SIZE;
+    const int size = SimConfig::AIRCRAFT_SIZE;
     const int halfSize = size / 2;
     Vector2 pixelPos = NMToPixels(aircraft.getPosition());
 

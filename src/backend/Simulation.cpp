@@ -27,7 +27,7 @@ void Simulation::addAirport(const Airport& airport) {
 }
 
 bool Simulation::canSpawnMore() const {
-    return aircraft.size() < CONSTANTS.game.MAX_AIRCRAFT;
+    return aircraft.size() < SimConfig::MAX_AIRCRAFT;
 }
 
 void Simulation::detectConflicts() {

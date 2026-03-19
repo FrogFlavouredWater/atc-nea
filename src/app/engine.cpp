@@ -16,19 +16,17 @@ Engine& Engine::getInstance() {
 
 void Engine::constructWindow() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
-    InitWindow(CONSTANTS.display.SCREEN_WIDTH, 
-               CONSTANTS.display.SCREEN_HEIGHT, 
+    InitWindow(DisplayConfig::SCREEN_WIDTH,
+               DisplayConfig::SCREEN_HEIGHT,
                "ATC Simulator");
-    SetTargetFPS(CONSTANTS.display.TARGET_FPS);
+    SetTargetFPS(DisplayConfig::TARGET_FPS);
 }
 
 void Engine::handleInput() {
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mousePos = GetMousePosition();
         Vec2 nmMousePos = UI::PixelsToNM(mousePos);
-        // We need 30px in NM. PixelsToNM(Vector2) exists.
-        Vec2 radiusVector = UI::PixelsToNM(Vector2{30.0f, 0.0f});
-        double selectionRadiusNm = radiusVector.x; 
+        double selectionRadiusNm = 30.0 / SimConfig::PIXELS_PER_NM;
 
         selectedAircraft = sim.getAircraftAt(nmMousePos, selectionRadiusNm);
         
@@ -76,7 +74,7 @@ void Engine::update(double deltaTime) {
 
     if (currentState == GameState::RUNNING) {
         handleInput();
-        double scaledDeltaTime = deltaTime * CONSTANTS.game.SIMULATION_SPEED;
+        double scaledDeltaTime = deltaTime * SimConfig::SIMULATION_SPEED;
         sim.update(scaledDeltaTime);
     }
 }
