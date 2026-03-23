@@ -8,6 +8,43 @@
 
 Engine Engine::instance;
 
+namespace {
+void applyDisplaySettings(const DisplaySettings& displaySettings) {
+    if (IsWindowFullscreen() && displaySettings.screenMode != ScreenMode::FULLSCREEN) {
+        ToggleFullscreen();
+    }
+
+    switch (displaySettings.screenMode) {
+    case ScreenMode::WINDOWED:
+        ClearWindowState(FLAG_WINDOW_UNDECORATED);
+        SetWindowSize(displaySettings.screenWidth, displaySettings.screenHeight);
+        SetWindowPosition(
+            (GetMonitorWidth(0) - displaySettings.screenWidth) / 2,
+            (GetMonitorHeight(0) - displaySettings.screenHeight) / 2
+        );
+        break;
+
+    case ScreenMode::BORDERLESS_WINDOWED:
+        SetWindowState(FLAG_WINDOW_UNDECORATED);
+        SetWindowPosition(0, 0);
+        SetWindowSize(GetMonitorWidth(0), GetMonitorHeight(0));
+        break;
+
+    case ScreenMode::FULLSCREEN:
+        ClearWindowState(FLAG_WINDOW_UNDECORATED);
+        if (!IsWindowFullscreen()) {
+            ToggleFullscreen();
+        }
+        break;
+
+    default:
+        throw std::runtime_error("Unhandled ScreenMode enum");
+    }
+
+    SetTargetFPS(displaySettings.targetFps);
+}
+}
+
 Engine::Engine() : currentState(GameState::MENU), ui{}, sim{}, selectedAircraft(nullptr) {}
 
 Engine& Engine::getInstance() {
@@ -16,40 +53,50 @@ Engine& Engine::getInstance() {
 
 void Engine::constructWindow() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
-    InitWindow(DisplayConfig::SCREEN_WIDTH,
-               DisplayConfig::SCREEN_HEIGHT,
+    InitWindow(settings.display.screenWidth,
+               settings.display.screenHeight,
                "ATC Simulator");
-    SetTargetFPS(DisplayConfig::TARGET_FPS);
+    applySettings();
+}
+
+void Engine::applySettings() {
+    applyDisplaySettings(settings.display);
+    sim.applySettings(settings.sim);
 }
 
 void Engine::handleInput() {
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mousePos = GetMousePosition();
-        Vec2 nmMousePos = UI::PixelsToNM(mousePos);
-        double selectionRadiusNm = 30.0 / SimConfig::PIXELS_PER_NM;
+        Vec2 nmMousePos = UI::PixelsToNM(mousePos, settings.sim);
+        double selectionRadiusNm = 30.0 / settings.sim.pixelsPerNm;
 
         selectedAircraft = sim.getAircraftAt(nmMousePos, selectionRadiusNm);
-        
-        for (auto& plane : sim.getAircraft()) {
-            plane->setSelected(plane.get() == selectedAircraft);
-        }
     }
 
     if (selectedAircraft) {
-        double targetHeading = selectedAircraft->getTargetHeading();
-        double targetSpeed = selectedAircraft->getTargetSpeed();
+        AircraftCommand command = selectedAircraft->getCommand();
+        bool commandChanged = false;
 
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-            selectedAircraft->setHeading(targetHeading - 30);
+            command.targetHeading -= 30.0;
+            commandChanged = true;
         }
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-            selectedAircraft->setHeading(targetHeading + 30);
+            command.targetHeading += 30.0;
+            commandChanged = true;
         }
         if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-            selectedAircraft->setSpeed(targetSpeed + 10);
+            command.targetSpeed += 10.0;
+            commandChanged = true;
         }
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-            selectedAircraft->setSpeed(targetSpeed - 10);
+            command.targetSpeed -= 10.0;
+            commandChanged = true;
+        }
+
+        if (commandChanged) {
+            command.source = AircraftControlMode::MANUAL;
+            sim.issueCommand(selectedAircraft, command);
         }
     }
 }
@@ -74,8 +121,12 @@ void Engine::update(double deltaTime) {
 
     if (currentState == GameState::RUNNING) {
         handleInput();
-        double scaledDeltaTime = deltaTime * SimConfig::SIMULATION_SPEED;
+        double scaledDeltaTime = deltaTime * settings.sim.simulationSpeed;
         sim.update(scaledDeltaTime);
+
+        if (selectedAircraft && !sim.containsAircraft(selectedAircraft)) {
+            selectedAircraft = nullptr;
+        }
     }
 }
 
@@ -85,21 +136,54 @@ void Engine::render() {
 
     switch (currentState) {
     case GameState::MENU:
-        ui.DrawMainMenu(currentState);
+        if (showingSettings) {
+            SettingsMenuResult result = ui.DrawSettingsMenu(pendingSettings);
+
+            if (result.applyRequested) {
+                settings = pendingSettings;
+                applySettings();
+            }
+
+            if (result.closeRequested) {
+                showingSettings = false;
+                pendingSettings = settings;
+            }
+        } else {
+            switch (ui.DrawMainMenu()) {
+            case MainMenuAction::START:
+                currentState = GameState::RUNNING;
+                break;
+
+            case MainMenuAction::OPEN_SETTINGS:
+                pendingSettings = settings;
+                showingSettings = true;
+                break;
+
+            case MainMenuAction::EXIT:
+                currentState = GameState::EXIT;
+                break;
+
+            case MainMenuAction::NONE:
+                break;
+
+            default:
+                throw std::runtime_error("Unhandled MainMenuAction enum");
+            }
+        }
         break;
 
     case GameState::RUNNING:
-        ui.DrawSimulation(sim, debugEnabled, selectedAircraft);
+        ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
         break;
 
     case GameState::PAUSED:
-        ui.DrawSimulation(sim, debugEnabled, selectedAircraft);
+        ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
         ui.DrawPauseMenu(currentState);
         break;
-    
+
     case GameState::GAME_OVER:
         break;
-            
+
     default:
         throw std::runtime_error("Unhandled Mode enum");
     }
@@ -111,7 +195,6 @@ void Engine::run() {
     while (!shouldClose()) {
         double deltaTime = static_cast<double>(GetFrameTime());
         update(deltaTime);
-        // std::cout << sim.getAircraft().size();
         render();
     }
     CloseWindow();

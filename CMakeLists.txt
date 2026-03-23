@@ -15,6 +15,7 @@ target_sources(atc PRIVATE
     src/backend/airport.cpp
     src/backend/Simulation.cpp
     src/backend/Aircraft.h
+    src/backend/AircraftControl.h
     src/backend/airport.h
     src/backend/Simulation.h
 )

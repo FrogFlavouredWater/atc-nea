@@ -5,24 +5,207 @@
 // to generate implementation code for RayGui
 #define RAYGUI_IMPLEMENTATION
 #include <raygui.h>
-#include "common/constants.h"
 #include "common/utils.h"
+#include <algorithm>
 #include <cmath>
 
 #ifndef DEG2RAD
 #define DEG2RAD (PI / 180.0)
 #endif
 
-void UI::DrawMainMenu(GameState& currentState) {
-    //background
+namespace {
+constexpr Color kBackdropTop{3, 10, 20, 255};
+constexpr Color kBackdropBottom{9, 33, 67, 255};
+constexpr Color kOverlay{0, 0, 0, 130};
+constexpr Color kCard{11, 18, 31, 255};
+constexpr Color kPanel{16, 27, 44, 255};
+constexpr Color kBorder{38, 58, 84, 255};
+constexpr Color kHeader{7, 13, 24, 255};
+constexpr Color kFooter{9, 16, 28, 255};
+constexpr Color kAccent{63, 190, 255, 255};
+constexpr Color kAction{30, 98, 163, 255};
+constexpr Color kActionFocused{45, 126, 200, 255};
+constexpr Color kActionPressed{23, 77, 128, 255};
+constexpr Color kText{235, 241, 247, 255};
+constexpr Color kMuted{142, 158, 179, 255};
+constexpr Color kValueFill{24, 41, 63, 255};
+
+const char* screenModeLabel(ScreenMode mode);
+ScreenMode nextScreenMode(ScreenMode mode);
+
+void applySettingsTheme() {
+    GuiLoadStyleDefault();
+    GuiSetStyle(DEFAULT, TEXT_SIZE, 18);
+    GuiSetStyle(DEFAULT, BORDER_WIDTH, 1);
+
+    GuiSetStyle(BUTTON, BASE_COLOR_NORMAL, ColorToInt(kAction));
+    GuiSetStyle(BUTTON, BASE_COLOR_FOCUSED, ColorToInt(kActionFocused));
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, ColorToInt(kActionPressed));
+    GuiSetStyle(BUTTON, BORDER_COLOR_NORMAL, ColorToInt(kAction));
+    GuiSetStyle(BUTTON, BORDER_COLOR_FOCUSED, ColorToInt(kActionFocused));
+    GuiSetStyle(BUTTON, BORDER_COLOR_PRESSED, ColorToInt(kActionPressed));
+    GuiSetStyle(BUTTON, TEXT_COLOR_NORMAL, ColorToInt(RAYWHITE));
+    GuiSetStyle(BUTTON, TEXT_COLOR_FOCUSED, ColorToInt(RAYWHITE));
+    GuiSetStyle(BUTTON, TEXT_COLOR_PRESSED, ColorToInt(RAYWHITE));
+
+    GuiSetStyle(VALUEBOX, BASE_COLOR_NORMAL, ColorToInt(Color{14, 24, 38, 255}));
+    GuiSetStyle(VALUEBOX, BORDER_COLOR_NORMAL, ColorToInt(kBorder));
+    GuiSetStyle(VALUEBOX, TEXT_COLOR_NORMAL, ColorToInt(kText));
+
+    GuiSetStyle(SLIDER, BASE_COLOR_NORMAL, ColorToInt(Color{34, 50, 71, 255}));
+    GuiSetStyle(SLIDER, BASE_COLOR_FOCUSED, ColorToInt(kAccent));
+    GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, ColorToInt(kAccent));
+    GuiSetStyle(SLIDER, BORDER_COLOR_NORMAL, ColorToInt(kBorder));
+}
+
+void drawPanel(Rectangle bounds, Color fill, Color border) {
+    DrawRectangleRec(bounds, fill);
+    DrawRectangleLinesEx(bounds, 1.0f, border);
+}
+
+void drawSection(Rectangle bounds, const char* title, const char* subtitle) {
+    drawPanel(bounds, kPanel, kBorder);
+    DrawRectangle(static_cast<int>(bounds.x), static_cast<int>(bounds.y), static_cast<int>(bounds.width), 4, kAccent);
+    DrawText(title, static_cast<int>(bounds.x) + 18, static_cast<int>(bounds.y) + 16, 22, kText);
+    DrawText(subtitle, static_cast<int>(bounds.x) + 18, static_cast<int>(bounds.y) + 42, 14, kMuted);
+}
+
+void drawValueChip(Rectangle bounds, const char* text) {
+    drawPanel(bounds, kValueFill, kBorder);
+    int textWidth = MeasureText(text, 16);
+    DrawText(text,
+             static_cast<int>(bounds.x + (bounds.width - static_cast<float>(textWidth)) / 2.0f),
+             static_cast<int>(bounds.y + 6.0f),
+             16,
+             kText);
+}
+
+void drawFieldText(int x, int y, const char* label, const char* subtitle) {
+    DrawText(label, x, y, 18, kText);
+    if (subtitle && subtitle[0] != '\0') {
+        DrawText(subtitle, x, y + 20, 14, kMuted);
+    }
+}
+
+void drawSpinnerRow(Rectangle row,
+                    const char* label,
+                    const char* subtitle,
+                    int& value,
+                    int minValue,
+                    int maxValue,
+                    bool& editMode) {
+    const bool hasSubtitle = subtitle && subtitle[0] != '\0';
+    const int left = static_cast<int>(row.x);
+    const int top = static_cast<int>(row.y + (hasSubtitle ? 0.0f : 7.0f));
+    const float controlWidth = 170.0f;
+    Rectangle control{
+        row.x + row.width - controlWidth,
+        row.y + (hasSubtitle ? 4.0f : 2.0f),
+        controlWidth,
+        34.0f
+    };
+
+    drawFieldText(left, top, label, subtitle);
+
+    if (GuiSpinner(control, nullptr, &value, minValue, maxValue, editMode)) {
+        editMode = !editMode;
+    }
+}
+
+void drawModeRow(Rectangle row, const char* label, const char* subtitle, ScreenMode& mode) {
+    const bool hasSubtitle = subtitle && subtitle[0] != '\0';
+    const float buttonWidth = 190.0f;
+    Rectangle control{
+        row.x + row.width - buttonWidth,
+        row.y + (hasSubtitle ? 4.0f : 2.0f),
+        buttonWidth,
+        34.0f
+    };
+
+    drawFieldText(static_cast<int>(row.x), static_cast<int>(row.y + (hasSubtitle ? 0.0f : 7.0f)), label, subtitle);
+
+    if (GuiButton(control, screenModeLabel(mode))) {
+        mode = nextScreenMode(mode);
+    }
+}
+
+void drawSliderRow(Rectangle row,
+                   const char* label,
+                   const char* subtitle,
+                   double& value,
+                   double minValue,
+                   double maxValue,
+                   const char* valueFormat) {
+    const bool hasSubtitle = subtitle && subtitle[0] != '\0';
+    drawFieldText(static_cast<int>(row.x), static_cast<int>(row.y + (hasSubtitle ? 0.0f : 4.0f)), label, subtitle);
+
+    Rectangle valueChip{
+        row.x + row.width - 92.0f,
+        row.y + 2.0f,
+        92.0f,
+        30.0f
+    };
+    drawValueChip(valueChip, TextFormat(valueFormat, value));
+
+    float sliderValue = static_cast<float>(value);
+    GuiSliderBar(
+        Rectangle{
+            row.x,
+            row.y + (hasSubtitle ? 30.0f : 26.0f),
+            row.width,
+            18.0f
+        },
+        nullptr,
+        nullptr,
+        &sliderValue,
+        static_cast<float>(minValue),
+        static_cast<float>(maxValue)
+    );
+    value = sliderValue;
+}
+
+void clampPendingSettings(AppSettings& settings) {
+    settings.display.screenWidth = std::clamp(settings.display.screenWidth, 800, 3840);
+    settings.display.screenHeight = std::clamp(settings.display.screenHeight, 600, 2160);
+    settings.display.targetFps = std::clamp(settings.display.targetFps, 30, 240);
+    settings.sim.maxAircraft = std::clamp(settings.sim.maxAircraft, 1, 25);
+    settings.sim.aircraftSize = std::clamp(settings.sim.aircraftSize, 4, 32);
+
+    if (settings.sim.minXNm >= settings.sim.maxXNm) {
+        settings.sim.maxXNm = settings.sim.minXNm + 1.0;
+    }
+    if (settings.sim.minYNm >= settings.sim.maxYNm) {
+        settings.sim.maxYNm = settings.sim.minYNm + 1.0;
+    }
+}
+
+const char* screenModeLabel(ScreenMode mode) {
+    switch (mode) {
+    case ScreenMode::WINDOWED: return "Windowed";
+    case ScreenMode::BORDERLESS_WINDOWED: return "Borderless";
+    case ScreenMode::FULLSCREEN: return "Fullscreen";
+    default: return "UNKNOWN";
+    }
+}
+
+ScreenMode nextScreenMode(ScreenMode mode) {
+    switch (mode) {
+    case ScreenMode::WINDOWED: return ScreenMode::BORDERLESS_WINDOWED;
+    case ScreenMode::BORDERLESS_WINDOWED: return ScreenMode::FULLSCREEN;
+    case ScreenMode::FULLSCREEN: return ScreenMode::WINDOWED;
+    default: return ScreenMode::WINDOWED;
+    }
+}
+}
+
+MainMenuAction UI::DrawMainMenu() {
+    GuiLoadStyleDefault();
     DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK, DARKBLUE);
 
-    //radar range circles in background
-    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 200, Fade(DARKGRAY, 0.3f)); // Input must take float
-    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 400, Fade(DARKGRAY, 0.2f)); // Input must take float
-    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 600, Fade(DARKGRAY, 0.1f)); // Input must take float
+    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 200, Fade(DARKGRAY, 0.3f));
+    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 400, Fade(DARKGRAY, 0.2f));
+    DrawCircleLines(GetScreenWidth()/2, GetScreenHeight()/2, 600, Fade(DARKGRAY, 0.1f));
 
-    //title + shadow
     const char* title = "ATC SIMULATOR";
     int fontSize = 60;
     int titleWidth = MeasureText(title, fontSize);
@@ -32,77 +215,283 @@ void UI::DrawMainMenu(GameState& currentState) {
     DrawText(title, titleX + 4, titleY + 4, fontSize, BLACK);
     DrawText(title, titleX, titleY, fontSize, RAYWHITE);
 
-    //subtitle
     const char* subtitle = "Air Traffic Control Simulation";
     int subFontSize = 20;
     int subWidth = MeasureText(subtitle, subFontSize);
     DrawText(subtitle, centerWidth(GetScreenWidth(), subWidth), titleY + 70, subFontSize, LIGHTGRAY);
 
-    //button crap
-    double btnWidth = 200.0;
+    double btnWidth = 220.0;
     double btnHeight = 50.0;
-    double btnX = (double)centerWidth(GetScreenWidth(), (int)btnWidth);
-    double btnY = (double)GetScreenHeight() * 0.6;
+    double btnX = static_cast<double>(centerWidth(GetScreenWidth(), static_cast<int>(btnWidth)));
+    double btnY = static_cast<double>(GetScreenHeight()) * 0.56;
 
-    //GUI flags
     GuiSetStyle(BUTTON, BASE_COLOR_NORMAL, ColorToInt(DARKGRAY));
     GuiSetStyle(BUTTON, TEXT_COLOR_NORMAL, ColorToInt(RAYWHITE));
     GuiSetStyle(BUTTON, BASE_COLOR_FOCUSED, ColorToInt(BLUE));
     GuiSetStyle(BUTTON, TEXT_COLOR_FOCUSED, ColorToInt(WHITE));
     GuiSetStyle(BUTTON, TEXT_SIZE, 20);
 
-    if (GuiButton(Rectangle{ (float)btnX, (float)btnY, (float)btnWidth, (float)btnHeight }, "START MISSION")) { // Input must take float
-        currentState = GameState::RUNNING;
+    if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, "START MISSION")) {
+        return MainMenuAction::START;
     }
 
-    if (GuiButton(Rectangle{ (float)btnX, (float)(btnY + btnHeight + 20.0), (float)btnWidth, (float)btnHeight }, "EXIT")) { // Input must take float
-        currentState = GameState::EXIT;
+    if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY + btnHeight + 20.0), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, "SETTINGS")) {
+        return MainMenuAction::OPEN_SETTINGS;
     }
 
-    //version info
+    if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY + (btnHeight + 20.0) * 2.0), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, "EXIT")) {
+        return MainMenuAction::EXIT;
+    }
+
     DrawText("v0.0.1a", 10, GetScreenHeight() - 25, 15, DARKGRAY);
+    return MainMenuAction::NONE;
 }
 
-void UI::DrawSimulationHUD(int aircraftCount, bool& debugEnabled) {
+SettingsMenuResult UI::DrawSettingsMenu(AppSettings& settings) {
+    static bool editScreenWidth = false;
+    static bool editScreenHeight = false;
+    static bool editTargetFps = false;
+    static bool editMaxAircraft = false;
+    static bool editAircraftSize = false;
+
+    SettingsMenuResult result;
+
+    applySettingsTheme();
+
+    DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(), kBackdropTop, kBackdropBottom);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), kOverlay);
+
+    const float screenWidth = static_cast<float>(GetScreenWidth());
+    const float screenHeight = static_cast<float>(GetScreenHeight());
+    const float cardWidth = std::min(std::clamp(screenWidth * 0.74f, 980.0f, 1180.0f), screenWidth - 56.0f);
+    const float cardHeight = std::min(std::clamp(screenHeight * 0.82f, 660.0f, 740.0f), screenHeight - 36.0f);
+
+    Rectangle card{
+        (screenWidth - cardWidth) / 2.0f,
+        (screenHeight - cardHeight) / 2.0f,
+        cardWidth,
+        cardHeight
+    };
+    Rectangle header{ card.x, card.y, card.width, 94.0f };
+    Rectangle footer{ card.x, card.y + card.height - 76.0f, card.width, 76.0f };
+
+    drawPanel(card, kCard, kBorder);
+    DrawRectangleRec(header, kHeader);
+    DrawRectangleRec(footer, kFooter);
+    DrawRectangle(static_cast<int>(card.x), static_cast<int>(header.y + header.height), static_cast<int>(card.width), 1, kBorder);
+    DrawRectangle(static_cast<int>(card.x), static_cast<int>(footer.y), static_cast<int>(card.width), 1, kBorder);
+
+    DrawText("Simulator Settings", static_cast<int>(card.x) + 28, static_cast<int>(card.y) + 20, 34, RAYWHITE);
+    DrawText("Review changes here, then press Apply when you are ready.", static_cast<int>(card.x) + 28, static_cast<int>(card.y) + 58, 18, Color{208, 220, 235, 255});
+
+    if (GuiButton(Rectangle{ card.x + card.width - 58.0f, card.y + 20.0f, 32.0f, 32.0f }, "X")) {
+        result.closeRequested = true;
+    }
+
+    const float sidePadding = 24.0f;
+    const float sectionGap = 24.0f;
+    const float sectionWidth = (card.width - sidePadding * 2.0f - sectionGap) / 2.0f;
+    Rectangle displaySection{
+        card.x + sidePadding,
+        card.y + 116.0f,
+        sectionWidth,
+        270.0f
+    };
+    Rectangle simSection{
+        displaySection.x + displaySection.width + sectionGap,
+        displaySection.y,
+        sectionWidth,
+        270.0f
+    };
+    Rectangle boundsSection{
+        card.x + sidePadding,
+        displaySection.y + displaySection.height + 22.0f,
+        card.width - sidePadding * 2.0f,
+        footer.y - (displaySection.y + displaySection.height + 40.0f)
+    };
+
+    drawSection(displaySection, "Display", "Window shape, frame pacing, and launch mode.");
+    drawSection(simSection, "Simulation", "Core scale, limits, and playback speed.");
+    drawSection(boundsSection, "Simulation Bounds", "These limits determine when aircraft leave the radar area.");
+
+    drawSpinnerRow(Rectangle{ displaySection.x + 20.0f, displaySection.y + 76.0f, displaySection.width - 40.0f, 40.0f },
+                   "Screen Width",
+                   "",
+                   settings.display.screenWidth,
+                   800,
+                   3840,
+                   editScreenWidth);
+    drawSpinnerRow(Rectangle{ displaySection.x + 20.0f, displaySection.y + 124.0f, displaySection.width - 40.0f, 40.0f },
+                   "Screen Height",
+                   "",
+                   settings.display.screenHeight,
+                   600,
+                   2160,
+                   editScreenHeight);
+    drawSpinnerRow(Rectangle{ displaySection.x + 20.0f, displaySection.y + 172.0f, displaySection.width - 40.0f, 40.0f },
+                   "Target FPS",
+                   "",
+                   settings.display.targetFps,
+                   30,
+                   240,
+                   editTargetFps);
+    drawModeRow(Rectangle{ displaySection.x + 20.0f, displaySection.y + 220.0f, displaySection.width - 40.0f, 40.0f },
+                "Screen Mode",
+                "",
+                settings.display.screenMode);
+
+    drawSpinnerRow(Rectangle{ simSection.x + 20.0f, simSection.y + 76.0f, simSection.width - 40.0f, 40.0f },
+                   "Max Aircraft",
+                   "",
+                   settings.sim.maxAircraft,
+                   1,
+                   25,
+                   editMaxAircraft);
+    drawSpinnerRow(Rectangle{ simSection.x + 20.0f, simSection.y + 124.0f, simSection.width - 40.0f, 40.0f },
+                   "Aircraft Size",
+                   "",
+                   settings.sim.aircraftSize,
+                   4,
+                   32,
+                   editAircraftSize);
+    drawSliderRow(Rectangle{ simSection.x + 20.0f, simSection.y + 172.0f, simSection.width - 40.0f, 46.0f },
+                  "Pixels per NM",
+                  "",
+                  settings.sim.pixelsPerNm,
+                  2.0,
+                  20.0,
+                  "%.1f");
+    drawSliderRow(Rectangle{ simSection.x + 20.0f, simSection.y + 220.0f, simSection.width - 40.0f, 46.0f },
+                  "Simulation Speed",
+                  "",
+                  settings.sim.simulationSpeed,
+                  1.0,
+                  120.0,
+                  "%.1fx");
+
+    const float boundsInnerWidth = (boundsSection.width - 60.0f) / 2.0f;
+    Rectangle horizontalBounds{
+        boundsSection.x + 20.0f,
+        boundsSection.y + 72.0f,
+        boundsInnerWidth,
+        108.0f
+    };
+    Rectangle verticalBounds{
+        horizontalBounds.x + horizontalBounds.width + 20.0f,
+        horizontalBounds.y,
+        boundsInnerWidth,
+        108.0f
+    };
+
+    DrawText("Horizontal", static_cast<int>(horizontalBounds.x), static_cast<int>(boundsSection.y) + 58, 18, kText);
+    DrawText("Vertical", static_cast<int>(verticalBounds.x), static_cast<int>(boundsSection.y) + 58, 18, kText);
+
+    drawSliderRow(Rectangle{ horizontalBounds.x, horizontalBounds.y + 16.0f, horizontalBounds.width, 46.0f },
+                  "Minimum X",
+                  "",
+                  settings.sim.minXNm,
+                  -200.0,
+                  -10.0,
+                  "%.0f");
+    drawSliderRow(Rectangle{ horizontalBounds.x, horizontalBounds.y + 82.0f, horizontalBounds.width, 46.0f },
+                  "Maximum X",
+                  "",
+                  settings.sim.maxXNm,
+                  10.0,
+                  200.0,
+                  "%.0f");
+    drawSliderRow(Rectangle{ verticalBounds.x, verticalBounds.y + 16.0f, verticalBounds.width, 46.0f },
+                  "Minimum Y",
+                  "",
+                  settings.sim.minYNm,
+                  -150.0,
+                  -10.0,
+                  "%.0f");
+    drawSliderRow(Rectangle{ verticalBounds.x, verticalBounds.y + 82.0f, verticalBounds.width, 46.0f },
+                  "Maximum Y",
+                  "",
+                  settings.sim.maxYNm,
+                  10.0,
+                  150.0,
+                  "%.0f");
+
+    if (!editScreenWidth) {
+        settings.display.screenWidth = std::clamp(settings.display.screenWidth, 800, 3840);
+    }
+    if (!editScreenHeight) {
+        settings.display.screenHeight = std::clamp(settings.display.screenHeight, 600, 2160);
+    }
+    if (!editTargetFps) {
+        settings.display.targetFps = std::clamp(settings.display.targetFps, 30, 240);
+    }
+    if (!editMaxAircraft) {
+        settings.sim.maxAircraft = std::clamp(settings.sim.maxAircraft, 1, 25);
+    }
+    if (!editAircraftSize) {
+        settings.sim.aircraftSize = std::clamp(settings.sim.aircraftSize, 4, 32);
+    }
+
+    if (settings.sim.minXNm >= settings.sim.maxXNm) {
+        settings.sim.maxXNm = settings.sim.minXNm + 1.0;
+    }
+    if (settings.sim.minYNm >= settings.sim.maxYNm) {
+        settings.sim.maxYNm = settings.sim.minYNm + 1.0;
+    }
+
+    DrawText("Changes stay pending until you press Apply.", static_cast<int>(card.x) + 28, static_cast<int>(footer.y) + 30, 16, kMuted);
+
+    if (GuiButton(Rectangle{ footer.x + footer.width - 216.0f, footer.y + 20.0f, 96.0f, 34.0f }, "APPLY")) {
+        clampPendingSettings(settings);
+        editScreenWidth = false;
+        editScreenHeight = false;
+        editTargetFps = false;
+        editMaxAircraft = false;
+        editAircraftSize = false;
+        result.applyRequested = true;
+    }
+    if (GuiButton(Rectangle{ footer.x + footer.width - 108.0f, footer.y + 20.0f, 84.0f, 34.0f }, "BACK")) {
+        result.closeRequested = true;
+    }
+
+    return result;
+}
+
+void UI::DrawSimulationHUD(int aircraftCount, int outOfBoundsCount, double simulationSpeed, bool& debugEnabled) {
+    GuiLoadStyleDefault();
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
+    DrawText(TextFormat("Out: %i", outOfBoundsCount), 10, 38, 20, DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
-    DrawText(TextFormat("SimSpeed: %.0f", SimConfig::SIMULATION_SPEED), GetScreenWidth() - 130, 40, 20, WHITE);
-    // Debug toggle button
+    DrawText(TextFormat("SimSpeed: %.1f", simulationSpeed), GetScreenWidth() - 145, 40, 20, WHITE);
+
     double btnWidth = 80.0;
     double btnHeight = 30.0;
-    double btnX = (double)GetScreenWidth() - btnWidth - 10.0;
-    double btnY = (double)GetScreenHeight() - btnHeight - 10.0;
+    double btnX = static_cast<double>(GetScreenWidth()) - btnWidth - 10.0;
+    double btnY = static_cast<double>(GetScreenHeight()) - btnHeight - 10.0;
 
-    if (GuiButton(Rectangle{ (float)btnX, (float)btnY, (float)btnWidth, (float)btnHeight }, debugEnabled ? "DEBUG: ON" : "DEBUG: OFF")) { // Input must take float
+    if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, debugEnabled ? "DEBUG: ON" : "DEBUG: OFF")) {
         debugEnabled = !debugEnabled;
     }
 }
 
-void UI::DrawBackground()
-{
+void UI::DrawBackground() {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK);
 }
 
-void UI::DrawRangeRings(Vec2 airportPos)
-{
-    // Standard approach distances
+void UI::DrawRangeRings(Vec2 airportPos, const SimSettings& simSettings) {
     float rings[] = { 5.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f };
 
     for (float radiusNm : rings) {
-        Vector2 center = NMToPixels(airportPos);
-        float pixelRadius = (float)NMToPixels(radiusNm);
+        Vector2 center = NMToPixels(airportPos, simSettings);
+        float pixelRadius = static_cast<float>(NMToPixels(radiusNm, simSettings));
 
-        // Draw a faint dashed or solid circle
         DrawCircleLinesV(center, pixelRadius, Fade(DARKGRAY, 0.9f));
-
-        // Label the ring (optional)
-        DrawText(TextFormat("%0.f NM", radiusNm), (int)center.x + 5, (int)(center.y - pixelRadius - 15), 12, DARKGRAY);
+        DrawText(TextFormat("%0.f NM", radiusNm), static_cast<int>(center.x) + 5, static_cast<int>(center.y - pixelRadius - 15), 12, DARKGRAY);
     }
 }
 
 void UI::DrawPauseMenu(GameState& currentState) {
-    //semitransparent overlay (absolutely cooked with this one)
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.6f)); // Input must take float
+    GuiLoadStyleDefault();
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.6f));
 
     const char* text = "PAUSED";
     int fontSize = 60;
@@ -115,128 +504,130 @@ void UI::DrawPauseMenu(GameState& currentState) {
 
     double btnWidth = 200.0;
     double btnHeight = 50.0;
-    double btnX = (double)centerWidth(GetScreenWidth(), (int)btnWidth);
-    double btnY = (double)centerHeight(GetScreenHeight(), (int)btnHeight);
+    double btnX = static_cast<double>(centerWidth(GetScreenWidth(), static_cast<int>(btnWidth)));
+    double btnY = static_cast<double>(centerHeight(GetScreenHeight(), static_cast<int>(btnHeight)));
 
     GuiSetStyle(BUTTON, TEXT_SIZE, 20);
 
-    if (GuiButton(Rectangle{ (float)btnX, (float)btnY, (float)btnWidth, (float)btnHeight }, "RESUME")) { // Input must take float
+    if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, "RESUME")) {
         currentState = GameState::RUNNING;
     }
 
-    if (GuiButton(Rectangle{ (float)btnX, (float)(btnY + btnHeight + 20.0), (float)btnWidth, (float)btnHeight }, "MAIN MENU")) { // Input must take float
+    if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY + btnHeight + 20.0), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, "MAIN MENU")) {
         currentState = GameState::MENU;
     }
 }
 
-Vector2 UI::NMToPixels(Vec2 nmPos) {
+Vector2 UI::NMToPixels(Vec2 nmPos, const SimSettings& simSettings) {
     return Vector2{
-        (float)(GetScreenWidth() / 2 + nmPos.x * SimConfig::PIXELS_PER_NM),
-        (float)(GetScreenHeight() / 2 + nmPos.y * SimConfig::PIXELS_PER_NM)
+        static_cast<float>(GetScreenWidth() / 2 + nmPos.x * simSettings.pixelsPerNm),
+        static_cast<float>(GetScreenHeight() / 2 + nmPos.y * simSettings.pixelsPerNm)
     };
 }
 
-double UI::NMToPixels(double nmDistance) {
-    return nmDistance * SimConfig::PIXELS_PER_NM;
+double UI::NMToPixels(double nmDistance, const SimSettings& simSettings) {
+    return nmDistance * simSettings.pixelsPerNm;
 }
 
-Vec2 UI::PixelsToNM(Vector2 pixelPos) {
+Vec2 UI::PixelsToNM(Vector2 pixelPos, const SimSettings& simSettings) {
     return Vec2{
-        (double)(pixelPos.x - GetScreenWidth() / 2) / SimConfig::PIXELS_PER_NM,
-        (double)(pixelPos.y - GetScreenHeight() / 2) / SimConfig::PIXELS_PER_NM
+        static_cast<double>(pixelPos.x - GetScreenWidth() / 2) / simSettings.pixelsPerNm,
+        static_cast<double>(pixelPos.y - GetScreenHeight() / 2) / simSettings.pixelsPerNm
     };
 }
 
-void UI::DrawSimulation(const Simulation& sim, bool& debugEnabled, Aircraft* selectedAircraft) {
+void UI::DrawSimulation(const Simulation& sim, const AppSettings& settings, bool& debugEnabled, Aircraft* selectedAircraft) {
     DrawBackground();
 
     for (const auto& airport : sim.getAirports()) {
-        DrawAirport(airport);
-        DrawRangeRings(airport.position);
+        DrawAirport(airport, settings.sim);
+        DrawRangeRings(airport.position, settings.sim);
     }
 
     for (const auto& plane : sim.getAircraft()) {
-        DrawAircraft(*plane, debugEnabled, plane.get() == selectedAircraft);
+        DrawAircraft(*plane, settings.sim, plane.get() == selectedAircraft);
     }
 
-    DrawSimulationHUD((int)sim.getAircraft().size(), debugEnabled);
-
+    DrawSimulationHUD(static_cast<int>(sim.getAircraft().size()),
+                      static_cast<int>(sim.getOutOfBoundsCount()),
+                      settings.sim.simulationSpeed,
+                      debugEnabled);
 
     if (selectedAircraft) {
-        DrawText("Selected: ", 10, 40, 20, WHITE);
-        DrawText(selectedAircraft->getCallsign().c_str(), 110, 40, 20, YELLOW);
-        DrawText("Controls: WASD/Arrows = Vector/Speed", 10, 65, 16, GRAY);
+        DrawText("Selected: ", 10, 70, 20, WHITE);
+        DrawText(selectedAircraft->getCallsign().c_str(), 110, 70, 20, YELLOW);
+        DrawText("Controls: WASD/Arrows = Vector/Speed", 10, 95, 16, GRAY);
 
         if (debugEnabled) {
-            int startY = 100;
+            int startY = 130;
             DrawText("--- DEBUG DATA ---", 10, startY, 16, GREEN);
             DrawText(TextFormat("Pos: %.2f, %.2f", selectedAircraft->getPosition().x, selectedAircraft->getPosition().y), 10, startY + 20, 16, GREEN);
             DrawText(TextFormat("Heading: %.2f (Target: %.2f)", selectedAircraft->getHeading(), selectedAircraft->getTargetHeading()), 10, startY + 40, 16, GREEN);
             DrawText(TextFormat("Speed: %.0f kts (Target: %.0f kts)", selectedAircraft->getSpeed(), selectedAircraft->getTargetSpeed()), 10, startY + 60, 16, GREEN);
             DrawText(TextFormat("Altitude: %i (Target: %i)", selectedAircraft->getAltitude(), selectedAircraft->getTargetAltitude()), 10, startY + 80, 16, GREEN);
-            DrawText(TextFormat("State: %s", Aircraft::stateToString(selectedAircraft->getState()).c_str()), 10, startY + 100, 16, GREEN);
+            DrawText(TextFormat("Phase: %s", toString(selectedAircraft->getPhase())), 10, startY + 100, 16, GREEN);
+            DrawText(TextFormat("Control: %s", toString(selectedAircraft->getControlMode())), 10, startY + 120, 16, GREEN);
+            DrawText(TextFormat("Conflict: %s", selectedAircraft->hasConflictAlert() ? "YES" : "NO"), 10, startY + 140, 16, GREEN);
         }
     } else {
-        DrawText("Click aircraft to vector", 10, 40, 20, WHITE);
+        DrawText("Click aircraft to vector", 10, 70, 20, WHITE);
     }
 }
 
-void UI::DrawAircraft(const Aircraft& aircraft, bool debugEnabled, bool selected) {
+void UI::DrawAircraft(const Aircraft& aircraft, const SimSettings& simSettings, bool selected) {
     auto aircraftColor = WHITE;
     if (selected) aircraftColor = YELLOW;
-    if (aircraft.getState() == AircraftState::CONFLICT) aircraftColor = RED;
+    if (aircraft.hasConflictAlert()) aircraftColor = RED;
 
-    const int size = SimConfig::AIRCRAFT_SIZE;
+    const int size = simSettings.aircraftSize;
     const int halfSize = size / 2;
-    Vector2 pixelPos = NMToPixels(aircraft.getPosition());
+    Vector2 pixelPos = NMToPixels(aircraft.getPosition(), simSettings);
 
     DrawRectangleLinesEx(
         Rectangle{
-            (float)(pixelPos.x - (float)halfSize), // Input must take float
-            (float)(pixelPos.y - (float)halfSize), // Input must take float
-            (float)size, // Input must take float
-            (float)size // Input must take float
+            static_cast<float>(pixelPos.x - static_cast<float>(halfSize)),
+            static_cast<float>(pixelPos.y - static_cast<float>(halfSize)),
+            static_cast<float>(size),
+            static_cast<float>(size)
         },
-        1.5f, // Input must take float
+        1.5f,
         aircraftColor
     );
 
-    const double vectorLength = 40.0; // Display pixels
+    const double vectorLength = 40.0;
     Vector2 vectorEnd = {
-        (float)(pixelPos.x + cos(DEG2RAD * (aircraft.getHeading() - 90.0)) * vectorLength), // Input must take float
-        (float)(pixelPos.y + sin(DEG2RAD * (aircraft.getHeading() - 90.0)) * vectorLength) // Input must take float
+        static_cast<float>(pixelPos.x + cos(DEG2RAD * (aircraft.getHeading() - 90.0)) * vectorLength),
+        static_cast<float>(pixelPos.y + sin(DEG2RAD * (aircraft.getHeading() - 90.0)) * vectorLength)
     };
 
-    DrawLineEx(pixelPos, vectorEnd, 2.0f, aircraftColor); // Input must take float
-
-    DrawText(aircraft.getCallsign().c_str(), (int)(pixelPos.x + 20), (int)(pixelPos.y - 12), 14, WHITE);
+    DrawLineEx(pixelPos, vectorEnd, 2.0f, aircraftColor);
+    DrawText(aircraft.getCallsign().c_str(), static_cast<int>(pixelPos.x + 20), static_cast<int>(pixelPos.y - 12), 14, WHITE);
 
     if (selected) {
-        DrawCircleLinesV(pixelPos, 25.0f, YELLOW); // Input must take float
+        DrawCircleLinesV(pixelPos, 25.0f, YELLOW);
     }
 }
 
-void UI::DrawAirport(const Airport& airport) {
-    Vector2 pixelPos = NMToPixels(airport.position);
-    float pixelRunwayLength = (float)NMToPixels(airport.runwayLength);
+void UI::DrawAirport(const Airport& airport, const SimSettings& simSettings) {
+    Vector2 pixelPos = NMToPixels(airport.position, simSettings);
+    float pixelRunwayLength = static_cast<float>(NMToPixels(airport.runwayLength, simSettings));
 
-    Rectangle rec = { pixelPos.x, pixelPos.y, pixelRunwayLength, 10.0f }; // Input must take float
-    Vector2 origin = { pixelRunwayLength / 2.0f, 5.0f }; // Input must take float
-    DrawRectanglePro(rec, origin, (float)(airport.runwayHeading - 90.0), GRAY); // Input must take float
+    Rectangle rec = { pixelPos.x, pixelPos.y, pixelRunwayLength, 10.0f };
+    Vector2 origin = { pixelRunwayLength / 2.0f, 5.0f };
+    DrawRectanglePro(rec, origin, static_cast<float>(airport.runwayHeading - 90.0), GRAY);
 
     double approachAngle = (airport.runwayHeading + 90.0) * DEG2RAD;
-    float approachAngleDeg = (float)(airport.runwayHeading + 90.0);
-    float pixelLocaliserLength = (float)NMToPixels(airport.localizer.length);
+    float approachAngleDeg = static_cast<float>(airport.runwayHeading + 90.0);
+    float pixelLocaliserLength = static_cast<float>(NMToPixels(airport.localizer.length, simSettings));
 
-    // Draw localizer availability cones from airport data
     for (const auto& sector : airport.localizer.sectors) {
-        float halfWidth = (float)(sector.width / 2.0);
-        DrawCircleSector(pixelPos, (float)NMToPixels(sector.range), approachAngleDeg - halfWidth, approachAngleDeg + halfWidth, 60, Fade(GREEN, 0.1f));
+        float halfWidth = static_cast<float>(sector.width / 2.0);
+        DrawCircleSector(pixelPos, static_cast<float>(NMToPixels(sector.range, simSettings)), approachAngleDeg - halfWidth, approachAngleDeg + halfWidth, 60, Fade(GREEN, 0.1f));
     }
 
     Vector2 localizerEnd = {
-        (float)(pixelPos.x + cos(approachAngle) * pixelLocaliserLength), // Input must take float
-        (float)(pixelPos.y + sin(approachAngle) * pixelLocaliserLength) // Input must take float
+        static_cast<float>(pixelPos.x + cos(approachAngle) * pixelLocaliserLength),
+        static_cast<float>(pixelPos.y + sin(approachAngle) * pixelLocaliserLength)
     };
-    DrawLineEx(pixelPos, localizerEnd, 1.0f, GREEN); // Input must take float
+    DrawLineEx(pixelPos, localizerEnd, 1.0f, GREEN);
 }

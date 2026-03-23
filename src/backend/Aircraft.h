@@ -1,36 +1,26 @@
 #pragma once
 #include <string>
+#include "backend/AircraftControl.h"
 #include "common/utils.h"
-
-enum class AircraftState {
-    APPROACH,
-    VECTORING,
-    ON_FINAL,
-    LANDING,
-    CONFLICT
-};
 
 class Aircraft {
 private:
     Vec2 position;
     Vec2 velocity;
 
-    //primary controls
+    // Live kinematics
     double heading;
-    double targetHeading;
-
     double speed;
-    double targetSpeed;
-
     int altitude;
-    int targetAltitude;
 
-    //properties
+    // Control and state
+    AircraftCommand command;
     std::string callsign;
-    AircraftState state;
-    bool selected;
+    FlightPhase phase;
+    AircraftControlMode controlMode;
+    bool conflictAlert;
 
-    //constraints
+    // Constraints
     double turnRate = 3.0; //deg/s
     double acceleration = 2.0; //kts/s
 
@@ -38,32 +28,25 @@ private:
 public:
     Aircraft(Vec2 startPos, double initialHeading, double initialSpeed, int initialAltitude, const std::string& id);
 
-    //TODO: move some of this to cpp when its no longer skeleton stuff
-    //also clamp the values like heading and speed
-
-    //gyatters
     [[nodiscard]] Vec2 getPosition() const { return position; }
     [[nodiscard]] double getHeading() const { return heading; }
-    [[nodiscard]] double getTargetHeading() const { return targetHeading; }
     [[nodiscard]] double getSpeed() const { return speed; }
-    [[nodiscard]] double getTargetSpeed() const { return targetSpeed; }
     [[nodiscard]] int getAltitude() const { return altitude; }
-    [[nodiscard]] int getTargetAltitude() const { return targetAltitude; }
-    [[nodiscard]] std::string getCallsign() const { return callsign; }
-    [[nodiscard]] AircraftState getState() const { return state; }
-    [[nodiscard]] bool isSelected() const { return selected; }
+    [[nodiscard]] AircraftCommand getCommand() const { return command; }
+    [[nodiscard]] double getTargetHeading() const { return command.targetHeading; }
+    [[nodiscard]] double getTargetSpeed() const { return command.targetSpeed; }
+    [[nodiscard]] int getTargetAltitude() const { return command.targetAltitude; }
+    [[nodiscard]] const std::string& getCallsign() const { return callsign; }
+    [[nodiscard]] FlightPhase getPhase() const { return phase; }
+    [[nodiscard]] AircraftControlMode getControlMode() const { return controlMode; }
+    [[nodiscard]] bool hasConflictAlert() const { return conflictAlert; }
 
-    //sixsetters
-    void setHeading(double newHeading);
-    void setSpeed(double newSpeed) { targetSpeed = newSpeed; }
-    void setSelected(bool isSelected) { selected = isSelected; }
-    void setState(AircraftState newState) { state = newState; }
+    void applyCommand(const AircraftCommand& newCommand);
+    void setPhase(FlightPhase newPhase) { phase = newPhase; }
+    void setConflictAlert(bool inConflict) { conflictAlert = inConflict; }
 
-    //funky shit
     [[nodiscard]] double distanceTo(const Aircraft& other) const;
     [[nodiscard]] bool collidesWith(const Aircraft& other) const;
 
     void update(double deltaTime);
-
-    static std::string stateToString(AircraftState state);
 };

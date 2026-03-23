@@ -12,6 +12,10 @@
 #define DEG2RAD (PI / 180.0)
 #endif
 
+namespace {
+constexpr double kCommandEpsilon = 0.01;
+}
+
 Aircraft::Aircraft(Vec2 startPos,
                     double initialHeading,
                     double initialSpeed,
@@ -19,14 +23,13 @@ Aircraft::Aircraft(Vec2 startPos,
                     const std::string &id):
                         position(startPos),
                         heading(initialHeading),
-                        targetHeading(initialHeading),
                         speed(initialSpeed),
-                        targetSpeed(initialSpeed),
                         altitude(initialAltitude),
-                        targetAltitude(initialAltitude),
+                        command{initialHeading, initialSpeed, initialAltitude, AircraftControlMode::AUTONOMOUS},
                         callsign(id),
-                        state(AircraftState::APPROACH),
-                        selected(false) {
+                        phase(FlightPhase::ARRIVAL),
+                        controlMode(AircraftControlMode::AUTONOMOUS),
+                        conflictAlert(false) {
 
     // Velocity in NM per hour
     double speedInNmPerSec = speed / 3600.0;
@@ -48,7 +51,7 @@ bool Aircraft::collidesWith(const Aircraft& other) const {
 
 void Aircraft::update(double deltaTime) {
 
-    double headingDiff = getShortestAngleDiff(targetHeading, heading);
+    double headingDiff = getShortestAngleDiff(command.targetHeading, heading);
 
     //smooth heading change
     if (fabs(headingDiff) > 0.0) {
@@ -65,13 +68,13 @@ void Aircraft::update(double deltaTime) {
     }
 
     //smooth speed change
-    if (fabs(speed - targetSpeed) > 0.0) {
-        if (speed < targetSpeed) {
+    if (fabs(speed - command.targetSpeed) > 0.0) {
+        if (speed < command.targetSpeed) {
             speed += acceleration * deltaTime;
-            if (speed > targetSpeed) speed = targetSpeed; //pos.overshoot prot (i bet harry will complain)
+            if (speed > command.targetSpeed) speed = command.targetSpeed;
         } else {
             speed -= acceleration * deltaTime;
-            if (speed < targetSpeed) speed = targetSpeed; //neg.overshoot prot
+            if (speed < command.targetSpeed) speed = command.targetSpeed;
         }
     }
 
@@ -85,17 +88,24 @@ void Aircraft::update(double deltaTime) {
 
 }
 
-void Aircraft::setHeading(double newHeading) {
-    targetHeading = normalizeAngle(newHeading);
-}
+void Aircraft::applyCommand(const AircraftCommand& newCommand) {
+    command.targetHeading = normalizeAngle(newCommand.targetHeading);
+    command.targetSpeed = std::max(0.0, newCommand.targetSpeed);
+    command.targetAltitude = std::max(0, newCommand.targetAltitude);
+    command.source = newCommand.source;
+    controlMode = newCommand.source;
 
-std::string Aircraft::stateToString(AircraftState state) {
-    switch (state) {
-        case AircraftState::APPROACH: return "APPROACH";
-        case AircraftState::VECTORING: return "VECTORING";
-        case AircraftState::ON_FINAL: return "ON_FINAL";
-        case AircraftState::LANDING: return "LANDING";
-        case AircraftState::CONFLICT: return "CONFLICT";
-        default: return "UNKNOWN";
+    if (controlMode == AircraftControlMode::ILS && phase != FlightPhase::LANDING && phase != FlightPhase::EXITED) {
+        phase = FlightPhase::ON_FINAL;
+        return;
+    }
+
+    const bool hasVectoringCommand =
+        std::abs(getShortestAngleDiff(command.targetHeading, heading)) > kCommandEpsilon
+        || std::abs(command.targetSpeed - speed) > kCommandEpsilon
+        || command.targetAltitude != altitude;
+
+    if (hasVectoringCommand && phase != FlightPhase::LANDING && phase != FlightPhase::EXITED) {
+        phase = FlightPhase::VECTORING;
     }
 }

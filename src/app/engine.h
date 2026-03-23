@@ -11,11 +11,15 @@ class Engine {
         UI ui;
         Simulation sim;
         Aircraft* selectedAircraft{};
+        AppSettings settings = AppConfig::DEFAULTS;
+        AppSettings pendingSettings = AppConfig::DEFAULTS;
+        bool showingSettings = false;
 
         bool debugEnabled = true;
 
         Engine();
-        static void constructWindow();
+        void constructWindow();
+        void applySettings();
 
         void handleInput();
         void spawnAircraft();
