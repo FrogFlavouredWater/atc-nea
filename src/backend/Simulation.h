@@ -8,6 +8,7 @@
 #include "common/utils.h"
 #include <vector>
 #include <memory>
+#include <set>
 #include <string>
 
 class Simulation {
@@ -19,6 +20,7 @@ private:
     SimSettings settings = SimConfig::DEFAULTS;
     SpawnService spawnService;
     SpawnRequestResult lastSpawnResult{};
+    std::set<std::pair<std::string, std::string>> activeConflictPairs;
 
     bool spawnAircraft(Vec2 pos, double heading, double speed, int altitude, const std::string& callsign);
     bool isOutOfBounds(const Aircraft& plane) const;

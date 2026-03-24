@@ -9,6 +9,8 @@ target_sources(atc PRIVATE
     src/app/main.cpp
     src/app/engine.cpp
     src/frontend/ui.cpp
+    src/frontend/ui_menu.cpp
+    src/frontend/ui_simulation.cpp
     src/common/utils.cpp
     src/common/logger.cpp
     src/backend/Aircraft.cpp
@@ -43,6 +45,7 @@ if(APPLE)
     list(APPEND _raygui_hints
         "/opt/homebrew/include"
         "/opt/homebrew/opt/raygui/include"
+        "/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include"
     )
 
     find_program(BREW_EXECUTABLE brew)

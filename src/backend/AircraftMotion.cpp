@@ -16,7 +16,7 @@ void updateVelocity(AircraftMotionState& motion) {
     constexpr double kDegToRad = kPi / 180.0;
 
     const double speedInNmPerSec = motion.speed / 3600.0;
-    motion.velocity.x = std::cos(kDegToRad * (motion.heading - 90.0)) * speedInNmPerSec;
+    motion.velocity.x = std::cos(kDegToRad * (motion.heading - 90.0)) * speedInNmPerSec; // -90 since 0 north in sim, but 0 east in trig
     motion.velocity.y = std::sin(kDegToRad * (motion.heading - 90.0)) * speedInNmPerSec;
 }
 

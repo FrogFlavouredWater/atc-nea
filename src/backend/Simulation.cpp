@@ -3,6 +3,7 @@
 #include "common/utils.h"
 #include <cmath>
 #include <algorithm>
+#include <sstream>
 #include <utility>
 
 #include "common/constants.h"
@@ -153,6 +154,31 @@ double ilsProfileAltitudeFt(const Aircraft& plane, const Airport& airport) {
 bool isValidAirportIndex(int airportIndex, size_t airportCount) {
     return airportIndex >= 0 && static_cast<size_t>(airportIndex) < airportCount;
 }
+
+std::string formatSpawnCandidate(const SpawnCandidate& candidate) {
+    std::ostringstream stream;
+    stream << candidate.callsign
+           << " from " << candidate.entryLabel
+           << " hdg " << static_cast<int>(std::lround(candidate.headingDeg))
+           << " spd " << static_cast<int>(std::lround(candidate.speedKts))
+           << " alt " << candidate.altitudeFt;
+    return stream.str();
+}
+
+std::string formatAircraftCommand(const AircraftCommand& command) {
+    std::ostringstream stream;
+    stream << "hdg " << static_cast<int>(std::lround(command.targetHeading))
+           << " spd " << static_cast<int>(std::lround(command.targetSpeed))
+           << " alt " << command.targetAltitude;
+    return stream.str();
+}
+
+std::pair<std::string, std::string> makeConflictPair(const Aircraft& first, const Aircraft& second) {
+    if (first.getCallsign() < second.getCallsign()) {
+        return {first.getCallsign(), second.getCallsign()};
+    }
+    return {second.getCallsign(), first.getCallsign()};
+}
 }
 
 Simulation::Simulation() {}
@@ -187,6 +213,7 @@ SpawnRequestResult Simulation::requestRandomSpawn() {
             SpawnRejectionReason::CAPACITY_REACHED,
             "Spawn blocked: max aircraft reached"
         };
+        Logger::warn(lastSpawnResult.message);
         return lastSpawnResult;
     }
 
@@ -197,6 +224,7 @@ SpawnRequestResult Simulation::requestRandomSpawn() {
             SpawnRejectionReason::NO_VALID_ENTRY_POINT,
             "Spawn blocked: no valid entry points"
         };
+        Logger::warn(lastSpawnResult.message);
         return lastSpawnResult;
     }
 
@@ -215,6 +243,7 @@ SpawnRequestResult Simulation::requestRandomSpawn() {
                 SpawnRejectionReason::CAPACITY_REACHED,
                 "Spawn blocked: max aircraft reached"
             };
+            Logger::warn(lastSpawnResult.message);
             return lastSpawnResult;
         }
 
@@ -226,6 +255,7 @@ SpawnRequestResult Simulation::requestRandomSpawn() {
             candidate.entryLabel,
             aircraft.back().get()
         };
+        Logger::info("Spawned aircraft " + formatSpawnCandidate(candidate));
         return lastSpawnResult;
     }
 
@@ -234,6 +264,7 @@ SpawnRequestResult Simulation::requestRandomSpawn() {
         SpawnRejectionReason::UNSAFE_SPAWN,
         "Spawn blocked: unsafe entry"
     };
+    Logger::warn(lastSpawnResult.message);
     return lastSpawnResult;
 }
 
@@ -243,12 +274,19 @@ void Simulation::clearLastSpawnResult() {
 
 bool Simulation::issueCommand(const Aircraft* plane, const AircraftCommand& command) {
     if (!containsAircraft(plane)) {
+        Logger::warn("Ignored command for aircraft that is no longer in the simulation");
         return false;
     }
 
     for (auto& candidate : aircraft) {
         if (candidate.get() == plane) {
             candidate->applyCommand(command);
+            if (command.source == AircraftControlMode::MANUAL) {
+                Logger::command("Issued manual command to "
+                                + candidate->getCallsign()
+                                + ": "
+                                + formatAircraftCommand(command));
+            }
             return true;
         }
     }
@@ -258,6 +296,7 @@ bool Simulation::issueCommand(const Aircraft* plane, const AircraftCommand& comm
 
 bool Simulation::toggleApproachClearance(const Aircraft* plane) {
     if (!containsAircraft(plane)) {
+        Logger::warn("Ignored approach clearance toggle for aircraft that is no longer in the simulation");
         return false;
     }
 
@@ -268,6 +307,9 @@ bool Simulation::toggleApproachClearance(const Aircraft* plane) {
 
         const bool newClearanceState = !candidate->hasApproachClearance();
         candidate->setApproachClearance(newClearanceState);
+        Logger::info(std::string("Approach clearance ")
+                     + (newClearanceState ? "granted to " : "revoked for ")
+                     + candidate->getCallsign());
 
         if (!newClearanceState) {
             candidate->clearAssignedIlsAirportIndex();
@@ -281,6 +323,7 @@ bool Simulation::toggleApproachClearance(const Aircraft* plane) {
                 };
                 candidate->applyCommand(releaseCommand);
                 candidate->setPhase(FlightPhase::ARRIVAL);
+                Logger::info("Released " + candidate->getCallsign() + " from ILS control");
             }
         }
 
@@ -292,6 +335,7 @@ bool Simulation::toggleApproachClearance(const Aircraft* plane) {
 
 void Simulation::addAirport(const Airport& airport) {
     airports.push_back(airport);
+    Logger::info("Added airport " + airport.name);
 }
 
 bool Simulation::canSpawnMore() const {
@@ -310,14 +354,30 @@ void Simulation::detectConflicts() {
         plane->setConflictAlert(false);
     }
 
+    std::set<std::pair<std::string, std::string>> currentConflictPairs;
     for (size_t i = 0; i < aircraft.size(); i++) {
         for (size_t j = i + 1; j < aircraft.size(); j++) {
             if (aircraft[i]->breachesSeparationWith(*aircraft[j])) {
                 aircraft[i]->setConflictAlert(true);
                 aircraft[j]->setConflictAlert(true);
+                currentConflictPairs.insert(makeConflictPair(*aircraft[i], *aircraft[j]));
             }
         }
     }
+
+    for (const auto& pair : currentConflictPairs) {
+        if (!activeConflictPairs.contains(pair)) {
+            Logger::warn("Conflict detected between " + pair.first + " and " + pair.second);
+        }
+    }
+
+    for (const auto& pair : activeConflictPairs) {
+        if (!currentConflictPairs.contains(pair)) {
+            Logger::info("Conflict resolved between " + pair.first + " and " + pair.second);
+        }
+    }
+
+    activeConflictPairs = std::move(currentConflictPairs);
 }
 
 GuidancePreview Simulation::getGuidancePreview(const Aircraft* plane) const {
@@ -361,6 +421,7 @@ void Simulation::updateAutonomousCommands(double deltaTime) {
         if (plane->getControlMode() == AircraftControlMode::ILS) {
             const int airportIndex = plane->getAssignedIlsAirportIndex();
             if (!isValidAirportIndex(airportIndex, airports.size())) {
+                Logger::warn("Aircraft " + plane->getCallsign() + " has an invalid assigned ILS airport index");
                 continue;
             }
 
@@ -381,6 +442,7 @@ void Simulation::updateAutonomousCommands(double deltaTime) {
             plane->setAssignedIlsAirportIndex(static_cast<int>(airportIndex));
             issueCommand(plane.get(), buildIlsCommand(*plane, airports[airportIndex]));
             plane->setPhase(FlightPhase::ON_FINAL);
+            Logger::info("Aircraft " + plane->getCallsign() + " captured ILS for " + airports[airportIndex].name);
             break;
         }
     }
@@ -512,7 +574,7 @@ void Simulation::removeLandedAircraft() {
                 }
 
                 ++landedCount;
-                Logger::debug("Aircraft " + plane->getCallsign() + " landed successfully on " + airport.name);
+                Logger::success("Aircraft " + plane->getCallsign() + " landed on " + airport.name);
                 return true;
             }),
         aircraft.end());
@@ -527,7 +589,7 @@ void Simulation::removeOutOfBoundsAircraft() {
                 }
 
                 ++outOfBoundsCount;
-                Logger::debug("Aircraft " + plane->getCallsign() + " left simulation bounds and was removed");
+                Logger::warn("Aircraft " + plane->getCallsign() + " left simulation bounds and was removed");
                 return true;
             }),
         aircraft.end());
