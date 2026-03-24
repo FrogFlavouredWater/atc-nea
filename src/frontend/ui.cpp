@@ -29,9 +29,70 @@ constexpr Color kActionPressed{23, 77, 128, 255};
 constexpr Color kText{235, 241, 247, 255};
 constexpr Color kMuted{142, 158, 179, 255};
 constexpr Color kValueFill{24, 41, 63, 255};
+constexpr Color kGuidanceYellow{245, 220, 66, 255};
+constexpr Color kApproachGreen{102, 255, 140, 255};
+constexpr Color kIlsBlue{82, 174, 255, 255};
+constexpr Color kTrackTrail{42, 210, 95, 255};
+constexpr float kIlsCenterlineAlpha = 0.52f;
+constexpr float kIlsMajorTickAlpha = 0.48f;
+constexpr float kIlsMinorTickAlpha = 0.24f;
+constexpr float kIlsBoundaryAlpha = 0.24f;
+constexpr float kIlsSectorEdgeAlpha = 0.12f;
+constexpr float kIlsLabelAlpha = 0.72f;
+constexpr double kVisibleTrailAgeSeconds = 90.0;
+constexpr double kSelectedTrailMinAlpha = 0.18;
+constexpr double kSelectedTrailMaxAlpha = 0.72;
+constexpr double kUnselectedTrailMaxAlpha = 0.55;
 
 const char* screenModeLabel(ScreenMode mode);
 ScreenMode nextScreenMode(ScreenMode mode);
+
+Vec2 headingDirectionNm(double headingDeg) {
+    return Vec2{
+        std::cos((headingDeg - 90.0) * DEG2RAD),
+        std::sin((headingDeg - 90.0) * DEG2RAD)
+    };
+}
+
+Vec2 headingNormalNm(double headingDeg) {
+    const Vec2 direction = headingDirectionNm(headingDeg);
+    return Vec2{-direction.y, direction.x};
+}
+
+void drawArcSegmentNm(Vec2 centerNm,
+                      double radiusNm,
+                      double startAngleDeg,
+                      double sweepAngleDeg,
+                      int directionSign,
+                      Color color,
+                      float thickness,
+                      const SimSettings& simSettings) {
+    if (radiusNm <= 0.0 || sweepAngleDeg <= 0.0 || directionSign == 0) {
+        return;
+    }
+
+    const int segments = std::max(12, static_cast<int>(std::ceil(sweepAngleDeg / 6.0)));
+    const double angleStepDeg = sweepAngleDeg / static_cast<double>(segments);
+
+    auto pointAtAngle = [&](double angleDeg) {
+        const double angleRad = angleDeg * DEG2RAD;
+        return UI::NMToPixels(
+            Vec2{
+                centerNm.x + std::cos(angleRad) * radiusNm,
+                centerNm.y + std::sin(angleRad) * radiusNm
+            },
+            simSettings
+        );
+    };
+
+    Vector2 previous = pointAtAngle(startAngleDeg);
+    for (int i = 1; i <= segments; ++i) {
+        const double angleDeg = startAngleDeg + angleStepDeg * static_cast<double>(i) * static_cast<double>(directionSign);
+        const Vector2 current = pointAtAngle(angleDeg);
+        DrawLineEx(previous, current, thickness, color);
+        previous = current;
+    }
+}
 
 void applySettingsTheme() {
     GuiLoadStyleDefault();
@@ -456,21 +517,39 @@ SettingsMenuResult UI::DrawSettingsMenu(AppSettings& settings) {
     return result;
 }
 
-void UI::DrawSimulationHUD(int aircraftCount, int outOfBoundsCount, double simulationSpeed, bool& debugEnabled) {
+SimulationViewResult UI::DrawSimulationHUD(int aircraftCount,
+                                           int outOfBoundsCount,
+                                           int landedCount,
+                                           double simulationSpeed,
+                                           bool& debugEnabled,
+                                           const SpawnRequestResult& spawnResult) {
+    SimulationViewResult result;
     GuiLoadStyleDefault();
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
-    DrawText(TextFormat("Out: %i", outOfBoundsCount), 10, 38, 20, DARKGRAY);
+    DrawText(TextFormat("Out: %i  Landed: %i", outOfBoundsCount, landedCount), 10, 38, 20, DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
     DrawText(TextFormat("SimSpeed: %.1f", simulationSpeed), GetScreenWidth() - 145, 40, 20, WHITE);
 
-    double btnWidth = 80.0;
+    if (!spawnResult.message.empty()) {
+        const Color messageColor = spawnResult.success ? Color{152, 223, 115, 255} : Color{255, 190, 102, 255};
+        DrawText(spawnResult.message.c_str(), 10, GetScreenHeight() - 28, 18, messageColor);
+    }
+
+    double btnWidth = 92.0;
     double btnHeight = 30.0;
     double btnX = static_cast<double>(GetScreenWidth()) - btnWidth - 10.0;
     double btnY = static_cast<double>(GetScreenHeight()) - btnHeight - 10.0;
+    double spawnBtnX = btnX - btnWidth - 10.0;
+
+    if (GuiButton(Rectangle{ static_cast<float>(spawnBtnX), static_cast<float>(btnY), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, "SPAWN")) {
+        result.spawnRequested = true;
+    }
 
     if (GuiButton(Rectangle{ static_cast<float>(btnX), static_cast<float>(btnY), static_cast<float>(btnWidth), static_cast<float>(btnHeight) }, debugEnabled ? "DEBUG: ON" : "DEBUG: OFF")) {
         debugEnabled = !debugEnabled;
     }
+
+    return result;
 }
 
 void UI::DrawBackground() {
@@ -478,7 +557,7 @@ void UI::DrawBackground() {
 }
 
 void UI::DrawRangeRings(Vec2 airportPos, const SimSettings& simSettings) {
-    float rings[] = { 5.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f };
+    float rings[] = { 5.0f, 10.0f, 20.0f, 30.0f, 40.0f };
 
     for (float radiusNm : rings) {
         Vector2 center = NMToPixels(airportPos, simSettings);
@@ -536,7 +615,10 @@ Vec2 UI::PixelsToNM(Vector2 pixelPos, const SimSettings& simSettings) {
     };
 }
 
-void UI::DrawSimulation(const Simulation& sim, const AppSettings& settings, bool& debugEnabled, Aircraft* selectedAircraft) {
+SimulationViewResult UI::DrawSimulation(const Simulation& sim,
+                                        const AppSettings& settings,
+                                        bool& debugEnabled,
+                                        Aircraft* selectedAircraft) {
     DrawBackground();
 
     for (const auto& airport : sim.getAirports()) {
@@ -544,19 +626,35 @@ void UI::DrawSimulation(const Simulation& sim, const AppSettings& settings, bool
         DrawRangeRings(airport.position, settings.sim);
     }
 
+    if (selectedAircraft) {
+        DrawGuidancePreview(sim.getGuidancePreview(selectedAircraft), settings.sim, debugEnabled);
+    }
+
     for (const auto& plane : sim.getAircraft()) {
         DrawAircraft(*plane, settings.sim, plane.get() == selectedAircraft);
     }
 
-    DrawSimulationHUD(static_cast<int>(sim.getAircraft().size()),
-                      static_cast<int>(sim.getOutOfBoundsCount()),
-                      settings.sim.simulationSpeed,
-                      debugEnabled);
+    const SimulationViewResult result = DrawSimulationHUD(static_cast<int>(sim.getAircraft().size()),
+                                                          static_cast<int>(sim.getOutOfBoundsCount()),
+                                                          static_cast<int>(sim.getLandedCount()),
+                                                          settings.sim.simulationSpeed,
+                                                          debugEnabled,
+                                                          sim.getLastSpawnResult());
 
     if (selectedAircraft) {
         DrawText("Selected: ", 10, 70, 20, WHITE);
-        DrawText(selectedAircraft->getCallsign().c_str(), 110, 70, 20, YELLOW);
-        DrawText("Controls: WASD/Arrows = Vector/Speed", 10, 95, 16, GRAY);
+        Color selectedColor = YELLOW;
+        if (selectedAircraft->getControlMode() == AircraftControlMode::ILS) {
+            selectedColor = kIlsBlue;
+        } else if (selectedAircraft->hasApproachClearance()) {
+            selectedColor = kApproachGreen;
+        }
+        DrawText(selectedAircraft->getCallsign().c_str(),
+                 110,
+                 70,
+                 20,
+                 selectedColor);
+        DrawText("Controls: A/D heading, W/S speed, Q/E altitude, I ILS clr, ,/. sim speed", 10, 95, 16, GRAY);
 
         if (debugEnabled) {
             int startY = 130;
@@ -565,19 +663,78 @@ void UI::DrawSimulation(const Simulation& sim, const AppSettings& settings, bool
             DrawText(TextFormat("Heading: %.2f (Target: %.2f)", selectedAircraft->getHeading(), selectedAircraft->getTargetHeading()), 10, startY + 40, 16, GREEN);
             DrawText(TextFormat("Speed: %.0f kts (Target: %.0f kts)", selectedAircraft->getSpeed(), selectedAircraft->getTargetSpeed()), 10, startY + 60, 16, GREEN);
             DrawText(TextFormat("Altitude: %i (Target: %i)", selectedAircraft->getAltitude(), selectedAircraft->getTargetAltitude()), 10, startY + 80, 16, GREEN);
-            DrawText(TextFormat("Phase: %s", toString(selectedAircraft->getPhase())), 10, startY + 100, 16, GREEN);
-            DrawText(TextFormat("Control: %s", toString(selectedAircraft->getControlMode())), 10, startY + 120, 16, GREEN);
-            DrawText(TextFormat("Conflict: %s", selectedAircraft->hasConflictAlert() ? "YES" : "NO"), 10, startY + 140, 16, GREEN);
+            DrawText(TextFormat("Vertical Speed: %+.0f fpm", selectedAircraft->getVerticalSpeedFpm()), 10, startY + 100, 16, GREEN);
+            DrawText(TextFormat("Turn Rate: %.2f deg/s", selectedAircraft->getTurnRateDegPerSec()), 10, startY + 120, 16, GREEN);
+            DrawText(TextFormat("Turn Radius: %.2f NM", selectedAircraft->getTurnRadiusNm()), 10, startY + 140, 16, GREEN);
+            DrawText(TextFormat("Phase: %s", toString(selectedAircraft->getPhase())), 10, startY + 160, 16, GREEN);
+            DrawText(TextFormat("Control: %s", toString(selectedAircraft->getControlMode())), 10, startY + 180, 16, GREEN);
+            DrawText(TextFormat("Conflict: %s", selectedAircraft->hasConflictAlert() ? "YES" : "NO"), 10, startY + 200, 16, GREEN);
+            DrawText(TextFormat("Approach Clearance: %s", selectedAircraft->hasApproachClearance() ? "CLEARED" : "NO"), 10, startY + 220, 16, GREEN);
+            DrawText(TextFormat("ILS Airport Index: %d", selectedAircraft->getAssignedIlsAirportIndex()), 10, startY + 240, 16, GREEN);
         }
     } else {
         DrawText("Click aircraft to vector", 10, 70, 20, WHITE);
+    }
+
+    return result;
+}
+
+void UI::DrawGuidancePreview(const GuidancePreview& preview, const SimSettings& simSettings, bool debugEnabled) {
+    if (preview.headingVector.visible) {
+        DrawLineEx(
+            NMToPixels(preview.headingVector.start, simSettings),
+            NMToPixels(preview.headingVector.end, simSettings),
+            2.0f,
+            kGuidanceYellow
+        );
+    }
+
+    if (preview.turnArc.visible) {
+        drawArcSegmentNm(preview.turnArc.center,
+                         preview.turnArc.radiusNm,
+                         preview.turnArc.startAngleDeg,
+                         preview.turnArc.sweepAngleDeg,
+                         preview.turnArc.directionSign,
+                         Fade(kGuidanceYellow, 0.9f),
+                         2.0f,
+                         simSettings);
+    }
+
+    if (preview.altitudeCapture.visible) {
+        drawArcSegmentNm(preview.altitudeCapture.arcCenter,
+                         preview.altitudeCapture.radiusNm,
+                         preview.altitudeCapture.startAngleDeg,
+                         preview.altitudeCapture.sweepAngleDeg,
+                         preview.altitudeCapture.directionSign,
+                         kGuidanceYellow,
+                         2.5f,
+                         simSettings);
+
+        if (debugEnabled) {
+            const Vector2 markerPos = NMToPixels(preview.altitudeCapture.position, simSettings);
+            DrawText(TextFormat("ALT %.0fs", preview.altitudeCapture.timeSeconds),
+                     static_cast<int>(markerPos.x + 8.0f),
+                     static_cast<int>(markerPos.y - 12.0f),
+                     12,
+                     kGuidanceYellow);
+        }
     }
 }
 
 void UI::DrawAircraft(const Aircraft& aircraft, const SimSettings& simSettings, bool selected) {
     auto aircraftColor = WHITE;
-    if (selected) aircraftColor = YELLOW;
-    if (aircraft.hasConflictAlert()) aircraftColor = RED;
+    if (aircraft.getControlMode() == AircraftControlMode::ILS) {
+        aircraftColor = kIlsBlue;
+    } else if (aircraft.hasApproachClearance()) {
+        aircraftColor = kApproachGreen;
+    } else if (selected) {
+        aircraftColor = YELLOW;
+    }
+    if (aircraft.hasConflictAlert()) {
+        aircraftColor = RED;
+    }
+
+    DrawAircraftTrail(aircraft, simSettings, selected);
 
     const int size = simSettings.aircraftSize;
     const int halfSize = size / 2;
@@ -601,10 +758,48 @@ void UI::DrawAircraft(const Aircraft& aircraft, const SimSettings& simSettings, 
     };
 
     DrawLineEx(pixelPos, vectorEnd, 2.0f, aircraftColor);
-    DrawText(aircraft.getCallsign().c_str(), static_cast<int>(pixelPos.x + 20), static_cast<int>(pixelPos.y - 12), 14, WHITE);
+    DrawText(aircraft.getCallsign().c_str(), static_cast<int>(pixelPos.x + 20), static_cast<int>(pixelPos.y - 12), 14, aircraftColor);
 
     if (selected) {
-        DrawCircleLinesV(pixelPos, 25.0f, YELLOW);
+        DrawCircleLinesV(pixelPos, 25.0f, aircraftColor);
+    }
+}
+
+void UI::DrawAircraftTrail(const Aircraft& aircraft, const SimSettings& simSettings, bool selected) {
+    const auto& trailPoints = aircraft.getTrailPoints();
+    if (trailPoints.size() < 2) {
+        return;
+    }
+
+    const double trailElapsedSeconds = aircraft.getTrailElapsedSeconds();
+    const double oldestVisibleAge = trailElapsedSeconds - trailPoints.front().recordedAtSeconds;
+    const double selectedFadeWindow = std::max(kVisibleTrailAgeSeconds, oldestVisibleAge);
+    const float dotRadius = selected ? 2.6f : 2.0f;
+
+    for (const auto& trailPoint : trailPoints) {
+        const double ageSeconds = trailElapsedSeconds - trailPoint.recordedAtSeconds;
+        if (!selected && ageSeconds > kVisibleTrailAgeSeconds) {
+            continue;
+        }
+
+        double alpha = 0.0;
+        if (selected) {
+            const double normalizedAge = selectedFadeWindow > 0.0
+                ? std::clamp(ageSeconds / selectedFadeWindow, 0.0, 1.0)
+                : 1.0;
+            alpha = kSelectedTrailMaxAlpha - (kSelectedTrailMaxAlpha - kSelectedTrailMinAlpha) * normalizedAge;
+        } else {
+            const double normalizedAge = std::clamp(ageSeconds / kVisibleTrailAgeSeconds, 0.0, 1.0);
+            alpha = kUnselectedTrailMaxAlpha * (1.0 - normalizedAge);
+        }
+
+        if (alpha <= 0.01) {
+            continue;
+        }
+
+        DrawCircleV(NMToPixels(trailPoint.position, simSettings),
+                    dotRadius,
+                    Fade(kTrackTrail, static_cast<float>(alpha)));
     }
 }
 
@@ -616,18 +811,63 @@ void UI::DrawAirport(const Airport& airport, const SimSettings& simSettings) {
     Vector2 origin = { pixelRunwayLength / 2.0f, 5.0f };
     DrawRectanglePro(rec, origin, static_cast<float>(airport.runwayHeading - 90.0), GRAY);
 
-    double approachAngle = (airport.runwayHeading + 90.0) * DEG2RAD;
-    float approachAngleDeg = static_cast<float>(airport.runwayHeading + 90.0);
-    float pixelLocaliserLength = static_cast<float>(NMToPixels(airport.localizer.length, simSettings));
+    const double localizerHeading = normalizeAngle(airport.runwayHeading + 180.0);
+    const Vec2 localizerDirection = headingDirectionNm(localizerHeading);
+    const Vec2 localizerNormal = headingNormalNm(localizerHeading);
+    const Vec2 localizerEndNm{
+        airport.position.x + localizerDirection.x * airport.localizer.length,
+        airport.position.y + localizerDirection.y * airport.localizer.length
+    };
 
-    for (const auto& sector : airport.localizer.sectors) {
-        float halfWidth = static_cast<float>(sector.width / 2.0);
-        DrawCircleSector(pixelPos, static_cast<float>(NMToPixels(sector.range, simSettings)), approachAngleDeg - halfWidth, approachAngleDeg + halfWidth, 60, Fade(GREEN, 0.1f));
+    DrawLineEx(pixelPos, NMToPixels(localizerEndNm, simSettings), 2.0f, Fade(kIlsBlue, kIlsCenterlineAlpha));
+
+    const int tickCount = static_cast<int>(std::floor(airport.localizer.length));
+    for (int i = 1; i <= tickCount; ++i) {
+        const double distanceNm = static_cast<double>(i);
+        const double halfTickLengthNm = (i % 5 == 0) ? 0.72 : 0.34;
+        const Vec2 tickCenter{
+            airport.position.x + localizerDirection.x * distanceNm,
+            airport.position.y + localizerDirection.y * distanceNm
+        };
+        const Vec2 tickStart{
+            tickCenter.x - localizerNormal.x * halfTickLengthNm,
+            tickCenter.y - localizerNormal.y * halfTickLengthNm
+        };
+        const Vec2 tickEnd{
+            tickCenter.x + localizerNormal.x * halfTickLengthNm,
+            tickCenter.y + localizerNormal.y * halfTickLengthNm
+        };
+        DrawLineEx(NMToPixels(tickStart, simSettings),
+                   NMToPixels(tickEnd, simSettings),
+                   i % 5 == 0 ? 1.8f : 1.2f,
+                   Fade(kIlsBlue, i % 5 == 0 ? kIlsMajorTickAlpha : kIlsMinorTickAlpha));
     }
 
-    Vector2 localizerEnd = {
-        static_cast<float>(pixelPos.x + cos(approachAngle) * pixelLocaliserLength),
-        static_cast<float>(pixelPos.y + sin(approachAngle) * pixelLocaliserLength)
-    };
-    DrawLineEx(pixelPos, localizerEnd, 1.0f, GREEN);
+    for (const auto& sector : airport.localizer.sectors) {
+        const double leftHeading = normalizeAngle(localizerHeading - sector.width / 2.0);
+        const double rightHeading = normalizeAngle(localizerHeading + sector.width / 2.0);
+        const Vec2 leftDirection = headingDirectionNm(leftHeading);
+        const Vec2 rightDirection = headingDirectionNm(rightHeading);
+        const Vec2 leftEndNm{
+            airport.position.x + leftDirection.x * sector.range,
+            airport.position.y + leftDirection.y * sector.range
+        };
+        const Vec2 rightEndNm{
+            airport.position.x + rightDirection.x * sector.range,
+            airport.position.y + rightDirection.y * sector.range
+        };
+
+        DrawLineEx(pixelPos, NMToPixels(leftEndNm, simSettings), 1.4f, Fade(kIlsBlue, kIlsBoundaryAlpha));
+        DrawLineEx(pixelPos, NMToPixels(rightEndNm, simSettings), 1.4f, Fade(kIlsBlue, kIlsBoundaryAlpha));
+        DrawLineEx(NMToPixels(leftEndNm, simSettings),
+                   NMToPixels(rightEndNm, simSettings),
+                   1.0f,
+                   Fade(kIlsBlue, kIlsSectorEdgeAlpha));
+    }
+
+    DrawText(airport.name.c_str(),
+             static_cast<int>(pixelPos.x + 10.0f),
+             static_cast<int>(pixelPos.y + 12.0f),
+             14,
+             Fade(kIlsBlue, kIlsLabelAlpha));
 }

@@ -35,8 +35,8 @@ namespace DisplayConfig {
     inline constexpr DisplaySettings DEFAULTS{
         1536,
         864,
-        ScreenMode::BORDERLESS_WINDOWED,
-        60
+        ScreenMode::WINDOWED,
+        120
     };
 }
 
@@ -44,12 +44,12 @@ namespace SimConfig {
     inline constexpr SimSettings DEFAULTS{
         5,
         12,
-        8.0,
-        30.0,
-        -90.0,
-        90.0,
-        -60.0,
-        60.0
+        10.5,
+        5.0,
+        -70.0,
+        70.0,
+        -40.0,
+        40.0
     };
 }
 

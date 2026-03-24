@@ -22,7 +22,7 @@ class Engine {
         void applySettings();
 
         void handleInput();
-        void spawnAircraft();
+        void spawnInitialTraffic();
 
     public:
         static Engine& getInstance();

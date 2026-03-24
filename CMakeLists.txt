@@ -12,10 +12,19 @@ target_sources(atc PRIVATE
     src/common/utils.cpp
     src/common/logger.cpp
     src/backend/Aircraft.cpp
+    src/backend/AircraftMotion.cpp
+    src/backend/GuidancePreview.cpp
+    src/backend/AircraftPerformance.h
+    src/backend/SpawnService.cpp
+    src/backend/TrajectoryPredictor.cpp
     src/backend/airport.cpp
     src/backend/Simulation.cpp
     src/backend/Aircraft.h
     src/backend/AircraftControl.h
+    src/backend/AircraftMotion.h
+    src/backend/GuidancePreview.h
+    src/backend/SpawnService.h
+    src/backend/TrajectoryPredictor.h
     src/backend/airport.h
     src/backend/Simulation.h
 )

@@ -3,12 +3,17 @@
 #include "frontend/ui.h"
 #include <raylib.h>
 #include <raymath.h>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
 Engine Engine::instance;
 
 namespace {
+constexpr double kSimulationSpeedStep = 1.0;
+constexpr double kSimulationSpeedMin = 1.0;
+constexpr double kSimulationSpeedMax = 120.0;
+
 void applyDisplaySettings(const DisplaySettings& displaySettings) {
     if (IsWindowFullscreen() && displaySettings.screenMode != ScreenMode::FULLSCREEN) {
         ToggleFullscreen();
@@ -65,6 +70,17 @@ void Engine::applySettings() {
 }
 
 void Engine::handleInput() {
+    if (IsKeyPressed(KEY_COMMA)) {
+        settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed - kSimulationSpeedStep,
+                                                  kSimulationSpeedMin,
+                                                  kSimulationSpeedMax);
+    }
+    if (IsKeyPressed(KEY_PERIOD)) {
+        settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed + kSimulationSpeedStep,
+                                                  kSimulationSpeedMin,
+                                                  kSimulationSpeedMax);
+    }
+
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mousePos = GetMousePosition();
         Vec2 nmMousePos = UI::PixelsToNM(mousePos, settings.sim);
@@ -73,16 +89,20 @@ void Engine::handleInput() {
         selectedAircraft = sim.getAircraftAt(nmMousePos, selectionRadiusNm);
     }
 
-    if (selectedAircraft) {
+    if (selectedAircraft && IsKeyPressed(KEY_I)) {
+        sim.toggleApproachClearance(selectedAircraft);
+    }
+
+    if (selectedAircraft && selectedAircraft->getControlMode() != AircraftControlMode::ILS) {
         AircraftCommand command = selectedAircraft->getCommand();
         bool commandChanged = false;
 
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-            command.targetHeading -= 30.0;
+            command.targetHeading -= 10.0;
             commandChanged = true;
         }
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-            command.targetHeading += 30.0;
+            command.targetHeading += 10.0;
             commandChanged = true;
         }
         if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
@@ -93,6 +113,14 @@ void Engine::handleInput() {
             command.targetSpeed -= 10.0;
             commandChanged = true;
         }
+        if (IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_PAGE_UP)) {
+            command.targetAltitude += 1000;
+            commandChanged = true;
+        }
+        if (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_PAGE_DOWN)) {
+            command.targetAltitude -= 1000;
+            commandChanged = true;
+        }
 
         if (commandChanged) {
             command.source = AircraftControlMode::MANUAL;
@@ -101,16 +129,17 @@ void Engine::handleInput() {
     }
 }
 
-void Engine::spawnAircraft() {
-    sim.spawnAircraft({-30.0, -20.0}, 135.0, 210.0, 3000, "AA123");
-    sim.spawnAircraft({40.0, 30.0}, 225.0, 250.0, 3500, "BA456");
-    sim.spawnAircraft({-10.0, 40.0}, 45.0, 180.0, 3200, "UA789");
+void Engine::spawnInitialTraffic() {
+    for (int i = 0; i < 3; ++i) {
+        sim.requestRandomSpawn();
+    }
+    sim.clearLastSpawnResult();
 }
 
 void Engine::init() {
     constructWindow();
     sim.addAirport({"LHR",{0.0, 0.0}, 90.0});
-    spawnAircraft();
+    spawnInitialTraffic();
 }
 
 void Engine::update(double deltaTime) {
@@ -173,7 +202,13 @@ void Engine::render() {
         break;
 
     case GameState::RUNNING:
-        ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
+        if (const SimulationViewResult result = ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
+            result.spawnRequested) {
+            const SpawnRequestResult spawnResult = sim.requestRandomSpawn();
+            if (spawnResult.success) {
+                selectedAircraft = spawnResult.aircraft;
+            }
+        }
         break;
 
     case GameState::PAUSED:
