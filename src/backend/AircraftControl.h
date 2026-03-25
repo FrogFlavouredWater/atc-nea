@@ -6,6 +6,14 @@ enum class AircraftControlMode {
     ILS
 };
 
+enum class AircraftInstructionType {
+    MAINTAIN,
+    VECTOR,
+    HOLD,
+    ILS_INTERCEPT,
+    CONFLICT_RESOLUTION
+};
+
 enum class FlightPhase {
     ARRIVAL,
     VECTORING,
@@ -21,11 +29,30 @@ struct AircraftCommand {
     AircraftControlMode source = AircraftControlMode::AUTONOMOUS;
 };
 
+struct AircraftInstruction {
+    AircraftInstructionType type = AircraftInstructionType::MAINTAIN;
+    double targetHeading = 0.0;
+    double targetSpeed = 0.0;
+    int targetAltitude = 0;
+    AircraftControlMode controlMode = AircraftControlMode::AUTONOMOUS;
+};
+
 inline constexpr const char* toString(AircraftControlMode mode) {
     switch (mode) {
         case AircraftControlMode::AUTONOMOUS: return "AUTONOMOUS";
         case AircraftControlMode::MANUAL: return "MANUAL";
         case AircraftControlMode::ILS: return "ILS";
+        default: return "UNKNOWN";
+    }
+}
+
+inline constexpr const char* toString(AircraftInstructionType type) {
+    switch (type) {
+        case AircraftInstructionType::MAINTAIN: return "MAINTAIN";
+        case AircraftInstructionType::VECTOR: return "VECTOR";
+        case AircraftInstructionType::HOLD: return "HOLD";
+        case AircraftInstructionType::ILS_INTERCEPT: return "ILS_INTERCEPT";
+        case AircraftInstructionType::CONFLICT_RESOLUTION: return "CONFLICT_RESOLUTION";
         default: return "UNKNOWN";
     }
 }

@@ -165,37 +165,43 @@ void Engine::handleInput() {
     }
 
     if (selectedAircraft && selectedAircraft->getControlMode() != AircraftControlMode::ILS) {
-        AircraftCommand command = selectedAircraft->getCommand();
-        bool commandChanged = false;
+        const AircraftCommand currentCommand = selectedAircraft->getCommand();
+        AircraftInstruction instruction{
+            AircraftInstructionType::VECTOR,
+            currentCommand.targetHeading,
+            currentCommand.targetSpeed,
+            currentCommand.targetAltitude,
+            AircraftControlMode::MANUAL
+        };
+        bool instructionChanged = false;
 
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-            command.targetHeading -= 10.0;
-            commandChanged = true;
+            instruction.targetHeading -= 10.0;
+            instructionChanged = true;
         }
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-            command.targetHeading += 10.0;
-            commandChanged = true;
+            instruction.targetHeading += 10.0;
+            instructionChanged = true;
         }
         if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-            command.targetSpeed += 10.0;
-            commandChanged = true;
+            instruction.targetSpeed += 10.0;
+            instructionChanged = true;
         }
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-            command.targetSpeed -= 10.0;
-            commandChanged = true;
+            instruction.targetSpeed -= 10.0;
+            instructionChanged = true;
         }
         if (IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_PAGE_UP)) {
-            command.targetAltitude += 1000;
-            commandChanged = true;
+            instruction.targetAltitude += 1000;
+            instructionChanged = true;
         }
         if (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_PAGE_DOWN)) {
-            command.targetAltitude -= 1000;
-            commandChanged = true;
+            instruction.targetAltitude -= 1000;
+            instructionChanged = true;
         }
 
-        if (commandChanged) {
-            command.source = AircraftControlMode::MANUAL;
-            sim.issueCommand(selectedAircraft, command);
+        if (instructionChanged) {
+            sim.issueInstruction(selectedAircraft, instruction);
         }
     }
 }

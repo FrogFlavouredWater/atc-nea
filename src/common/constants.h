@@ -67,3 +67,8 @@ enum class GameState {
     GAME_OVER,
     EXIT
 };
+
+namespace SeparationRules {
+    inline constexpr double HORIZONTAL_NM = 3.0;
+    inline constexpr double VERTICAL_FT = 1000.0;
+}

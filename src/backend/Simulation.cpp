@@ -11,8 +11,13 @@
 namespace {
 constexpr double kSpawnLookaheadSeconds = 75.0;
 constexpr double kSpawnPredictionStepSeconds = 5.0;
-constexpr double kHorizontalSeparationNm = 3.0;
-constexpr double kVerticalSeparationFt = 1000.0;
+constexpr double kConflictLookaheadSeconds = 180.0;
+constexpr double kConflictPredictionStepSeconds = 5.0;
+constexpr double kResolutionHoldSeconds = 8.0;
+constexpr double kResolutionReevaluationSeconds = 12.0;
+constexpr double kResolutionTurnSmallDeg = 20.0;
+constexpr double kResolutionTurnLargeDeg = 35.0;
+constexpr int kResolutionAltitudeStepFt = 1000;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegToRad = kPi / 180.0;
 constexpr double kIlsCaptureHeadingToleranceDeg = 35.0;
@@ -165,11 +170,12 @@ std::string formatSpawnCandidate(const SpawnCandidate& candidate) {
     return stream.str();
 }
 
-std::string formatAircraftCommand(const AircraftCommand& command) {
+std::string formatAircraftInstruction(const AircraftInstruction& instruction) {
     std::ostringstream stream;
-    stream << "hdg " << static_cast<int>(std::lround(command.targetHeading))
-           << " spd " << static_cast<int>(std::lround(command.targetSpeed))
-           << " alt " << command.targetAltitude;
+    stream << toString(instruction.type)
+           << " hdg " << static_cast<int>(std::lround(instruction.targetHeading))
+           << " spd " << static_cast<int>(std::lround(instruction.targetSpeed))
+           << " alt " << instruction.targetAltitude;
     return stream.str();
 }
 
@@ -179,11 +185,19 @@ std::pair<std::string, std::string> makeConflictPair(const Aircraft& first, cons
     }
     return {second.getCallsign(), first.getCallsign()};
 }
+
+std::pair<std::string, std::string> makeConflictPair(const std::string& first, const std::string& second) {
+    if (first < second) {
+        return {first, second};
+    }
+    return {second, first};
+}
 }
 
 Simulation::Simulation() {}
 
 void Simulation::update(double deltaTime) {
+    elapsedSimSeconds += deltaTime;
     updateAutonomousCommands(deltaTime);
 
     for (auto& plane : aircraft) {
@@ -192,6 +206,8 @@ void Simulation::update(double deltaTime) {
     removeLandedAircraft();
     removeOutOfBoundsAircraft();
     detectConflicts();
+    releaseResolvedAircraft();
+    updateConflictResolutions();
 }
 
 void Simulation::applySettings(const SimSettings& newSettings) {
@@ -272,26 +288,40 @@ void Simulation::clearLastSpawnResult() {
     lastSpawnResult = {};
 }
 
-bool Simulation::issueCommand(const Aircraft* plane, const AircraftCommand& command) {
+bool Simulation::issueInstruction(const Aircraft* plane, const AircraftInstruction& instruction) {
     if (!containsAircraft(plane)) {
-        Logger::warn("Ignored command for aircraft that is no longer in the simulation");
+        Logger::warn("Ignored instruction for aircraft that is no longer in the simulation");
         return false;
     }
 
     for (auto& candidate : aircraft) {
-        if (candidate.get() == plane) {
-            candidate->applyCommand(command);
-            if (command.source == AircraftControlMode::MANUAL) {
-                Logger::command("Issued manual command to "
-                                + candidate->getCallsign()
-                                + ": "
-                                + formatAircraftCommand(command));
-            }
-            return true;
+        if (candidate.get() != plane) {
+            continue;
         }
+
+        candidate->applyInstruction(instruction);
+        if (instruction.controlMode == AircraftControlMode::MANUAL) {
+            Logger::command("Issued manual instruction to "
+                            + candidate->getCallsign()
+                            + ": "
+                            + formatAircraftInstruction(instruction));
+        }
+        return true;
     }
 
     return false;
+}
+
+bool Simulation::issueCommand(const Aircraft* plane, const AircraftCommand& command) {
+    return issueInstruction(plane, AircraftInstruction{
+        command.source == AircraftControlMode::ILS
+            ? AircraftInstructionType::ILS_INTERCEPT
+            : AircraftInstructionType::VECTOR,
+        command.targetHeading,
+        command.targetSpeed,
+        command.targetAltitude,
+        command.source
+    });
 }
 
 bool Simulation::toggleApproachClearance(const Aircraft* plane) {
@@ -349,21 +379,306 @@ bool Simulation::containsAircraft(const Aircraft* plane) const {
         });
 }
 
+Aircraft* Simulation::findAircraftByCallsign(const std::string& callsign) {
+    for (auto& candidate : aircraft) {
+        if (candidate->getCallsign() == callsign) {
+            return candidate.get();
+        }
+    }
+    return nullptr;
+}
+
+const Aircraft* Simulation::findAircraftByCallsign(const std::string& callsign) const {
+    for (const auto& candidate : aircraft) {
+        if (candidate->getCallsign() == callsign) {
+            return candidate.get();
+        }
+    }
+    return nullptr;
+}
+
+std::vector<PredictedConflictAssessment> Simulation::collectResolvableConflicts() const {
+    std::vector<PredictedConflictAssessment> conflicts = predictedConflicts;
+    conflicts.reserve(conflicts.size() + activeConflictPairs.size());
+
+    for (const auto& pair : activeConflictPairs) {
+        const Aircraft* first = findAircraftByCallsign(pair.first);
+        const Aircraft* second = findAircraftByCallsign(pair.second);
+        if (!first || !second) {
+            continue;
+        }
+
+        conflicts.push_back(TrajectoryPredictor::assessConflict(*first,
+                                                                *second,
+                                                                kConflictLookaheadSeconds,
+                                                                kConflictPredictionStepSeconds));
+    }
+
+    std::sort(conflicts.begin(), conflicts.end(),
+              [](const PredictedConflictAssessment& first, const PredictedConflictAssessment& second) {
+                  if (std::abs(first.timeToClosestApproachSeconds - second.timeToClosestApproachSeconds) > 1e-6) {
+                      return first.timeToClosestApproachSeconds < second.timeToClosestApproachSeconds;
+                  }
+                  return first.severityScore > second.severityScore;
+              });
+    return conflicts;
+}
+
+std::vector<AircraftInstruction> Simulation::buildResolutionCandidates(const Aircraft& plane,
+                                                                       const Aircraft& other) const {
+    const AircraftCommand baseline = plane.getCommand();
+    std::vector<AircraftInstruction> candidates;
+    candidates.reserve(6);
+
+    const double dx = other.getPosition().x - plane.getPosition().x;
+    const double dy = other.getPosition().y - plane.getPosition().y;
+    const double intruderBearingDeg = normalizeAngle(std::atan2(dy, dx) * 180.0 / kPi + 90.0);
+    const double relativeBearingDeg = getShortestAngleDiff(intruderBearingDeg, plane.getHeading());
+    const double preferredTurnSign = relativeBearingDeg >= 0.0 ? -1.0 : 1.0;
+
+    auto addHeadingCandidate = [&](double offsetDeg) {
+        candidates.push_back(AircraftInstruction{
+            AircraftInstructionType::CONFLICT_RESOLUTION,
+            normalizeAngle(plane.getHeading() + offsetDeg),
+            baseline.targetSpeed,
+            baseline.targetAltitude,
+            AircraftControlMode::AUTONOMOUS
+        });
+    };
+
+    auto addAltitudeCandidate = [&](int targetAltitude) {
+        if (targetAltitude == baseline.targetAltitude) {
+            return;
+        }
+
+        candidates.push_back(AircraftInstruction{
+            AircraftInstructionType::CONFLICT_RESOLUTION,
+            baseline.targetHeading,
+            baseline.targetSpeed,
+            std::max(0, targetAltitude),
+            AircraftControlMode::AUTONOMOUS
+        });
+    };
+
+    addHeadingCandidate(preferredTurnSign * kResolutionTurnSmallDeg);
+    addHeadingCandidate(-preferredTurnSign * kResolutionTurnSmallDeg);
+    addHeadingCandidate(preferredTurnSign * kResolutionTurnLargeDeg);
+    addHeadingCandidate(-preferredTurnSign * kResolutionTurnLargeDeg);
+
+    if (plane.getAltitudeExact() > other.getAltitudeExact()) {
+        addAltitudeCandidate(baseline.targetAltitude + kResolutionAltitudeStepFt);
+        addAltitudeCandidate(baseline.targetAltitude - kResolutionAltitudeStepFt);
+    } else if (plane.getAltitudeExact() < other.getAltitudeExact()) {
+        addAltitudeCandidate(baseline.targetAltitude - kResolutionAltitudeStepFt);
+        addAltitudeCandidate(baseline.targetAltitude + kResolutionAltitudeStepFt);
+    } else {
+        addAltitudeCandidate(baseline.targetAltitude + kResolutionAltitudeStepFt);
+        addAltitudeCandidate(baseline.targetAltitude - kResolutionAltitudeStepFt);
+    }
+
+    return candidates;
+}
+
+PredictedConflictAssessment Simulation::assessConflictWithInstruction(const Aircraft& plane,
+                                                                     const AircraftInstruction& instruction,
+                                                                     const Aircraft& other) const {
+    Aircraft trialAircraft(plane.getPosition(),
+                           plane.getHeading(),
+                           plane.getSpeed(),
+                           plane.getAltitude(),
+                           plane.getCallsign());
+    trialAircraft.applyInstruction(instruction);
+
+    return TrajectoryPredictor::assessConflict(trialAircraft,
+                                               other,
+                                               kConflictLookaheadSeconds,
+                                               kConflictPredictionStepSeconds);
+}
+
+void Simulation::releaseResolvedAircraft() {
+    for (auto it = activeResolutionStates.begin(); it != activeResolutionStates.end(); ) {
+        Aircraft* plane = findAircraftByCallsign(it->first);
+        if (!plane) {
+            it = activeResolutionStates.erase(it);
+            continue;
+        }
+
+        const bool pairStillActive = activeConflictPairs.contains(it->second.pair)
+            || activePredictedConflictPairs.contains(it->second.pair);
+        const bool minimumHoldElapsed = elapsedSimSeconds - it->second.assignedAtSeconds >= kResolutionHoldSeconds;
+        if (pairStillActive || !minimumHoldElapsed) {
+            ++it;
+            continue;
+        }
+
+        issueInstruction(plane, it->second.resumeInstruction);
+        Logger::info("Released " + plane->getCallsign() + " from conflict resolution");
+        it = activeResolutionStates.erase(it);
+    }
+}
+
+void Simulation::updateConflictResolutions() {
+    const auto conflicts = collectResolvableConflicts();
+    if (conflicts.empty()) {
+        return;
+    }
+
+    for (const auto& conflict : conflicts) {
+        Aircraft* first = findAircraftByCallsign(conflict.firstCallsign);
+        Aircraft* second = findAircraftByCallsign(conflict.secondCallsign);
+        if (!first || !second) {
+            continue;
+        }
+
+        const auto pair = makeConflictPair(conflict.firstCallsign, conflict.secondCallsign);
+        auto firstStateIt = activeResolutionStates.find(first->getCallsign());
+        auto secondStateIt = activeResolutionStates.find(second->getCallsign());
+        const bool samePairRecentlyAssigned =
+            (firstStateIt != activeResolutionStates.end()
+             && firstStateIt->second.pair == pair
+             && elapsedSimSeconds - firstStateIt->second.assignedAtSeconds < kResolutionReevaluationSeconds)
+            || (secondStateIt != activeResolutionStates.end()
+                && secondStateIt->second.pair == pair
+                && elapsedSimSeconds - secondStateIt->second.assignedAtSeconds < kResolutionReevaluationSeconds);
+        if (samePairRecentlyAssigned) {
+            continue;
+        }
+
+        auto shouldPreserve = [this](const Aircraft& plane) {
+            if (plane.getControlMode() == AircraftControlMode::ILS) {
+                return true;
+            }
+            if (plane.hasApproachClearance()) {
+                return true;
+            }
+            if (airports.empty()) {
+                return false;
+            }
+            return distanceNm(plane.getPosition(), airports.front().position) < 12.0;
+        };
+
+        Aircraft* preferredAircraft = first;
+        Aircraft* alternateAircraft = second;
+        const bool preserveFirst = shouldPreserve(*first);
+        const bool preserveSecond = shouldPreserve(*second);
+        if (preserveFirst != preserveSecond) {
+            preferredAircraft = preserveFirst ? second : first;
+            alternateAircraft = preserveFirst ? first : second;
+        } else if (!airports.empty()) {
+            const double firstDistanceToAirportNm = distanceNm(first->getPosition(), airports.front().position);
+            const double secondDistanceToAirportNm = distanceNm(second->getPosition(), airports.front().position);
+            preferredAircraft = firstDistanceToAirportNm >= secondDistanceToAirportNm ? first : second;
+            alternateAircraft = preferredAircraft == first ? second : first;
+        } else if (second->getCallsign() > first->getCallsign()) {
+            preferredAircraft = second;
+            alternateAircraft = first;
+        }
+
+        std::vector<Aircraft*> maneuverOrder;
+        maneuverOrder.push_back(preferredAircraft);
+        if (alternateAircraft != preferredAircraft) {
+            maneuverOrder.push_back(alternateAircraft);
+        }
+
+        for (Aircraft* candidatePlane : maneuverOrder) {
+            auto existingStateIt = activeResolutionStates.find(candidatePlane->getCallsign());
+            if (existingStateIt != activeResolutionStates.end()
+                && existingStateIt->second.pair != pair) {
+                continue;
+            }
+
+            Aircraft* otherPlane = candidatePlane == first ? second : first;
+            const auto candidates = buildResolutionCandidates(*candidatePlane, *otherPlane);
+            AircraftInstruction bestInstruction{};
+            double bestSeverityScore = conflict.severityScore;
+            bool foundImprovement = false;
+            bool foundClearResolution = false;
+
+            for (const auto& candidateInstruction : candidates) {
+                const PredictedConflictAssessment assessment =
+                    assessConflictWithInstruction(*candidatePlane, candidateInstruction, *otherPlane);
+                if (!assessment.valid) {
+                    continue;
+                }
+
+                if (!assessment.breachesSeparation) {
+                    bestInstruction = candidateInstruction;
+                    foundImprovement = true;
+                    foundClearResolution = true;
+                    break;
+                }
+
+                if (assessment.severityScore < bestSeverityScore - 1e-6) {
+                    bestSeverityScore = assessment.severityScore;
+                    bestInstruction = candidateInstruction;
+                    foundImprovement = true;
+                }
+            }
+
+            if (!foundImprovement) {
+                continue;
+            }
+
+            const AircraftInstruction resumeInstruction =
+                existingStateIt != activeResolutionStates.end()
+                    ? existingStateIt->second.resumeInstruction
+                    : candidatePlane->getActiveInstruction();
+            issueInstruction(candidatePlane, bestInstruction);
+            activeResolutionStates[candidatePlane->getCallsign()] = ConflictResolutionState{
+                pair,
+                resumeInstruction,
+                bestInstruction,
+                elapsedSimSeconds
+            };
+
+            Logger::warn(std::string("Conflict resolution assigned to ")
+                         + candidatePlane->getCallsign()
+                         + " for pair "
+                         + pair.first
+                         + "/"
+                         + pair.second
+                         + (foundClearResolution ? " (clearing maneuver)" : " (mitigation maneuver)"));
+            break;
+        }
+    }
+}
+
 void Simulation::detectConflicts() {
     for (auto& plane : aircraft) {
         plane->setConflictAlert(false);
     }
 
     std::set<std::pair<std::string, std::string>> currentConflictPairs;
+    std::set<std::pair<std::string, std::string>> currentPredictedConflictPairs;
+    predictedConflicts.clear();
+
     for (size_t i = 0; i < aircraft.size(); i++) {
         for (size_t j = i + 1; j < aircraft.size(); j++) {
-            if (aircraft[i]->breachesSeparationWith(*aircraft[j])) {
+            const bool hasCurrentConflict = aircraft[i]->breachesSeparationWith(*aircraft[j]);
+            if (hasCurrentConflict) {
                 aircraft[i]->setConflictAlert(true);
                 aircraft[j]->setConflictAlert(true);
                 currentConflictPairs.insert(makeConflictPair(*aircraft[i], *aircraft[j]));
             }
+
+            const PredictedConflictAssessment assessment = TrajectoryPredictor::assessConflict(*aircraft[i],
+                                                                                               *aircraft[j],
+                                                                                               kConflictLookaheadSeconds,
+                                                                                               kConflictPredictionStepSeconds);
+            if (!hasCurrentConflict
+                && assessment.valid
+                && assessment.breachesSeparation
+                && assessment.timeToClosestApproachSeconds > 0.0) {
+                predictedConflicts.push_back(assessment);
+                currentPredictedConflictPairs.insert(makeConflictPair(*aircraft[i], *aircraft[j]));
+            }
         }
     }
+
+    std::sort(predictedConflicts.begin(), predictedConflicts.end(),
+              [](const PredictedConflictAssessment& first, const PredictedConflictAssessment& second) {
+                  return first.timeToClosestApproachSeconds < second.timeToClosestApproachSeconds;
+              });
 
     for (const auto& pair : currentConflictPairs) {
         if (!activeConflictPairs.contains(pair)) {
@@ -377,7 +692,28 @@ void Simulation::detectConflicts() {
         }
     }
 
+    for (const auto& assessment : predictedConflicts) {
+        const auto pair = std::make_pair(std::min(assessment.firstCallsign, assessment.secondCallsign),
+                                         std::max(assessment.firstCallsign, assessment.secondCallsign));
+        if (!activePredictedConflictPairs.contains(pair)) {
+            Logger::warn("Predicted conflict between "
+                         + assessment.firstCallsign
+                         + " and "
+                         + assessment.secondCallsign
+                         + " in "
+                         + std::to_string(static_cast<int>(std::lround(assessment.timeToClosestApproachSeconds)))
+                         + "s");
+        }
+    }
+
+    for (const auto& pair : activePredictedConflictPairs) {
+        if (!currentPredictedConflictPairs.contains(pair)) {
+            Logger::info("Predicted conflict cleared between " + pair.first + " and " + pair.second);
+        }
+    }
+
     activeConflictPairs = std::move(currentConflictPairs);
+    activePredictedConflictPairs = std::move(currentPredictedConflictPairs);
 }
 
 GuidancePreview Simulation::getGuidancePreview(const Aircraft* plane) const {
@@ -414,6 +750,10 @@ void Simulation::updateAutonomousCommands(double deltaTime) {
     (void)deltaTime;
 
     for (auto& plane : aircraft) {
+        if (plane->getInstructionType() == AircraftInstructionType::CONFLICT_RESOLUTION) {
+            continue;
+        }
+
         if (!plane->hasApproachClearance()) {
             continue;
         }
@@ -550,8 +890,8 @@ bool Simulation::predictionBreachesSeparation(const std::vector<PredictedAircraf
                                               const std::vector<PredictedAircraftState>& secondPrediction) const {
     const size_t sampleCount = std::min(firstPrediction.size(), secondPrediction.size());
     for (size_t i = 0; i < sampleCount; ++i) {
-        if (horizontalDistanceNm(firstPrediction[i].motion, secondPrediction[i].motion) < kHorizontalSeparationNm
-            && verticalDistanceFt(firstPrediction[i].motion, secondPrediction[i].motion) < kVerticalSeparationFt) {
+        if (horizontalDistanceNm(firstPrediction[i].motion, secondPrediction[i].motion) < SeparationRules::HORIZONTAL_NM
+            && verticalDistanceFt(firstPrediction[i].motion, secondPrediction[i].motion) < SeparationRules::VERTICAL_FT) {
             return true;
         }
     }

@@ -20,14 +20,16 @@ private:
     double trailElapsedSeconds = 0.0;
 
     // Control and state
+    AircraftInstruction activeInstruction;
     AircraftCommand command;
     std::string callsign;
     FlightPhase phase;
-    AircraftControlMode controlMode;
     bool conflictAlert;
     bool approachCleared = false;
     int assignedIlsAirportIndex = -1;
 
+    void syncCommandToInstruction();
+    void updatePhaseFromInstruction();
     void recordTrailPoint();
     void trimTrailPoints();
 
@@ -41,13 +43,15 @@ public:
     [[nodiscard]] double getAltitudeExact() const { return motion.altitude; }
     [[nodiscard]] const AircraftMotionState& getMotionState() const { return motion; }
     [[nodiscard]] const AircraftPerformance& getPerformance() const { return performance; }
+    [[nodiscard]] const AircraftInstruction& getActiveInstruction() const { return activeInstruction; }
     [[nodiscard]] const AircraftCommand& getCommand() const { return command; }
     [[nodiscard]] double getTargetHeading() const { return command.targetHeading; }
     [[nodiscard]] double getTargetSpeed() const { return command.targetSpeed; }
     [[nodiscard]] int getTargetAltitude() const { return command.targetAltitude; }
     [[nodiscard]] const std::string& getCallsign() const { return callsign; }
     [[nodiscard]] FlightPhase getPhase() const { return phase; }
-    [[nodiscard]] AircraftControlMode getControlMode() const { return controlMode; }
+    [[nodiscard]] AircraftControlMode getControlMode() const { return activeInstruction.controlMode; }
+    [[nodiscard]] AircraftInstructionType getInstructionType() const { return activeInstruction.type; }
     [[nodiscard]] bool hasConflictAlert() const { return conflictAlert; }
     [[nodiscard]] bool hasApproachClearance() const { return approachCleared; }
     [[nodiscard]] int getAssignedIlsAirportIndex() const { return assignedIlsAirportIndex; }
@@ -57,6 +61,7 @@ public:
     [[nodiscard]] const std::deque<AircraftTrailPoint>& getTrailPoints() const { return trailPoints; }
     [[nodiscard]] double getTrailElapsedSeconds() const { return trailElapsedSeconds; }
 
+    void applyInstruction(const AircraftInstruction& newInstruction);
     void applyCommand(const AircraftCommand& newCommand);
     void setPhase(FlightPhase newPhase) { phase = newPhase; }
     void setConflictAlert(bool inConflict) { conflictAlert = inConflict; }

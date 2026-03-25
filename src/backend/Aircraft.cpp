@@ -5,8 +5,6 @@
 #include <cmath>
 
 namespace {
-constexpr double kHorizontalSeparationNm = 3.0;
-constexpr double kVerticalSeparationFt = 1000.0;
 constexpr double kCommandEpsilon = 0.01;
 constexpr double kTrailSampleDistanceNm = 0.45;
 constexpr size_t kTrailMaxPoints = 2400;
@@ -15,6 +13,18 @@ double distanceNm(Vec2 from, Vec2 to) {
     const double dx = to.x - from.x;
     const double dy = to.y - from.y;
     return std::sqrt(dx * dx + dy * dy);
+}
+
+AircraftInstruction instructionFromCommand(const AircraftCommand& command) {
+    return AircraftInstruction{
+        command.source == AircraftControlMode::ILS
+            ? AircraftInstructionType::ILS_INTERCEPT
+            : AircraftInstructionType::VECTOR,
+        command.targetHeading,
+        command.targetSpeed,
+        command.targetAltitude,
+        command.source
+    };
 }
 }
 
@@ -25,10 +35,10 @@ Aircraft::Aircraft(Vec2 startPos,
                     const std::string &id):
                         performance{},
                         motion{},
+                        activeInstruction{},
                         command{initialHeading, initialSpeed, initialAltitude, AircraftControlMode::AUTONOMOUS},
                         callsign(id),
                         phase(FlightPhase::ARRIVAL),
-                        controlMode(AircraftControlMode::AUTONOMOUS),
                         conflictAlert(false) {
     motion.position = startPos;
     motion.heading = initialHeading;
@@ -37,9 +47,14 @@ Aircraft::Aircraft(Vec2 startPos,
 
     initializeAircraftMotion(motion, performance);
 
-    command.targetHeading = motion.heading;
-    command.targetSpeed = motion.speed;
-    command.targetAltitude = getAltitude();
+    activeInstruction = AircraftInstruction{
+        AircraftInstructionType::MAINTAIN,
+        motion.heading,
+        motion.speed,
+        getAltitude(),
+        AircraftControlMode::AUTONOMOUS
+    };
+    syncCommandToInstruction();
 
     recordTrailPoint();
 }
@@ -55,8 +70,8 @@ double Aircraft::altitudeDifferenceTo(const Aircraft& other) const {
 }
 
 bool Aircraft::breachesSeparationWith(const Aircraft& other) const {
-    return distanceTo(other) < kHorizontalSeparationNm
-        && altitudeDifferenceTo(other) < kVerticalSeparationFt;
+    return distanceTo(other) < SeparationRules::HORIZONTAL_NM
+        && altitudeDifferenceTo(other) < SeparationRules::VERTICAL_FT;
 }
 
 bool Aircraft::collidesWith(const Aircraft& other) const {
@@ -83,14 +98,34 @@ void Aircraft::trimTrailPoints() {
     }
 }
 
-void Aircraft::applyCommand(const AircraftCommand& newCommand) {
-    command.targetHeading = normalizeAngle(newCommand.targetHeading);
-    command.targetSpeed = std::clamp(newCommand.targetSpeed, performance.minSpeedKts, performance.maxSpeedKts);
-    command.targetAltitude = std::max(0, newCommand.targetAltitude);
-    command.source = newCommand.source;
-    controlMode = newCommand.source;
+void Aircraft::syncCommandToInstruction() {
+    command.source = activeInstruction.controlMode;
 
-    if (controlMode == AircraftControlMode::ILS && phase != FlightPhase::LANDING && phase != FlightPhase::EXITED) {
+    switch (activeInstruction.type) {
+        case AircraftInstructionType::MAINTAIN:
+            command.targetHeading = motion.heading;
+            command.targetSpeed = motion.speed;
+            command.targetAltitude = getAltitude();
+            return;
+        case AircraftInstructionType::VECTOR:
+        case AircraftInstructionType::HOLD:
+        case AircraftInstructionType::ILS_INTERCEPT:
+        case AircraftInstructionType::CONFLICT_RESOLUTION:
+            command.targetHeading = normalizeAngle(activeInstruction.targetHeading);
+            command.targetSpeed = std::clamp(activeInstruction.targetSpeed,
+                                             performance.minSpeedKts,
+                                             performance.maxSpeedKts);
+            command.targetAltitude = std::max(0, activeInstruction.targetAltitude);
+            return;
+    }
+}
+
+void Aircraft::updatePhaseFromInstruction() {
+    if (phase == FlightPhase::LANDING || phase == FlightPhase::EXITED) {
+        return;
+    }
+
+    if (activeInstruction.type == AircraftInstructionType::ILS_INTERCEPT) {
         phase = FlightPhase::ON_FINAL;
         return;
     }
@@ -100,9 +135,28 @@ void Aircraft::applyCommand(const AircraftCommand& newCommand) {
         || std::abs(command.targetSpeed - motion.speed) > kCommandEpsilon
         || std::abs(static_cast<double>(command.targetAltitude) - motion.altitude) > performance.altitudeCaptureToleranceFt;
 
-    if (hasVectoringCommand && phase != FlightPhase::LANDING && phase != FlightPhase::EXITED) {
+    if (activeInstruction.type == AircraftInstructionType::HOLD
+        || activeInstruction.type == AircraftInstructionType::CONFLICT_RESOLUTION
+        || (activeInstruction.type == AircraftInstructionType::VECTOR && hasVectoringCommand)) {
         phase = FlightPhase::VECTORING;
-    } else if (phase == FlightPhase::VECTORING && phase != FlightPhase::LANDING && phase != FlightPhase::EXITED) {
+    } else if (phase == FlightPhase::VECTORING) {
         phase = FlightPhase::ARRIVAL;
     }
+}
+
+void Aircraft::applyInstruction(const AircraftInstruction& newInstruction) {
+    activeInstruction.type = newInstruction.type;
+    activeInstruction.controlMode = newInstruction.controlMode;
+    activeInstruction.targetHeading = normalizeAngle(newInstruction.targetHeading);
+    activeInstruction.targetSpeed = std::clamp(newInstruction.targetSpeed,
+                                               performance.minSpeedKts,
+                                               performance.maxSpeedKts);
+    activeInstruction.targetAltitude = std::max(0, newInstruction.targetAltitude);
+
+    syncCommandToInstruction();
+    updatePhaseFromInstruction();
+}
+
+void Aircraft::applyCommand(const AircraftCommand& newCommand) {
+    applyInstruction(instructionFromCommand(newCommand));
 }

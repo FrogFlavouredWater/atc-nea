@@ -29,6 +29,7 @@ public:
     SimulationViewResult DrawSimulationHUD(int aircraftCount,
                                            int outOfBoundsCount,
                                            int landedCount,
+                                           int predictedConflictCount,
                                            double simulationSpeed,
                                            bool& debugEnabled,
                                            const SpawnRequestResult& spawnResult);

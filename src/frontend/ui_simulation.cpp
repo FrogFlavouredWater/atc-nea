@@ -39,22 +39,24 @@ void drawSelectedAircraftDetails(const Aircraft& aircraft, bool debugEnabled) {
     DrawText(TextFormat("Turn Radius: %.2f NM", aircraft.getTurnRadiusNm()), 10, startY + 140, 16, GREEN);
     DrawText(TextFormat("Phase: %s", toString(aircraft.getPhase())), 10, startY + 160, 16, GREEN);
     DrawText(TextFormat("Control: %s", toString(aircraft.getControlMode())), 10, startY + 180, 16, GREEN);
-    DrawText(TextFormat("Conflict: %s", aircraft.hasConflictAlert() ? "YES" : "NO"), 10, startY + 200, 16, GREEN);
-    DrawText(TextFormat("Approach Clearance: %s", aircraft.hasApproachClearance() ? "CLEARED" : "NO"), 10, startY + 220, 16, GREEN);
-    DrawText(TextFormat("ILS Airport Index: %d", aircraft.getAssignedIlsAirportIndex()), 10, startY + 240, 16, GREEN);
+    DrawText(TextFormat("Instruction: %s", toString(aircraft.getInstructionType())), 10, startY + 200, 16, GREEN);
+    DrawText(TextFormat("Conflict: %s", aircraft.hasConflictAlert() ? "YES" : "NO"), 10, startY + 220, 16, GREEN);
+    DrawText(TextFormat("Approach Clearance: %s", aircraft.hasApproachClearance() ? "CLEARED" : "NO"), 10, startY + 240, 16, GREEN);
+    DrawText(TextFormat("ILS Airport Index: %d", aircraft.getAssignedIlsAirportIndex()), 10, startY + 260, 16, GREEN);
 }
 } // namespace
 
 SimulationViewResult UI::DrawSimulationHUD(int aircraftCount,
                                            int outOfBoundsCount,
                                            int landedCount,
+                                           int predictedConflictCount,
                                            double simulationSpeed,
                                            bool& debugEnabled,
                                            const SpawnRequestResult& spawnResult) {
     SimulationViewResult result;
     GuiLoadStyleDefault();
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
-    DrawText(TextFormat("Out: %i  Landed: %i", outOfBoundsCount, landedCount), 10, 38, 20, DARKGRAY);
+    DrawText(TextFormat("Out: %i  Landed: %i  Predicted: %i", outOfBoundsCount, landedCount, predictedConflictCount), 10, 38, 20, DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
     DrawText(TextFormat("SimSpeed: %.1f", simulationSpeed), GetScreenWidth() - 145, 40, 20, WHITE);
 
@@ -138,6 +140,7 @@ SimulationViewResult UI::DrawSimulation(const Simulation& sim,
     const SimulationViewResult result = DrawSimulationHUD(static_cast<int>(sim.getAircraft().size()),
                                                           static_cast<int>(sim.getOutOfBoundsCount()),
                                                           static_cast<int>(sim.getLandedCount()),
+                                                          static_cast<int>(sim.getPredictedConflictCount()),
                                                           settings.sim.simulationSpeed,
                                                           debugEnabled,
                                                           sim.getLastSpawnResult());
