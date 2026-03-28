@@ -1,6 +1,6 @@
-#include "backend/GuidancePreview.h"
-#include "backend/Aircraft.h"
-#include "backend/TrajectoryPredictor.h"
+#include "backend/navigation/GuidancePreview.h"
+#include "backend/aircraft/Aircraft.h"
+#include "backend/navigation/TrajectoryPredictor.h"
 #include <algorithm>
 #include <cmath>
 
@@ -136,6 +136,58 @@ TurnArcPreview buildTurnArc(const Aircraft& aircraft) {
     return preview;
 }
 
+HoldPreview buildHoldPreview(const Aircraft& aircraft) {
+    HoldPreview preview;
+    const AircraftInstruction& instruction = aircraft.getActiveInstruction();
+    if (instruction.type != AircraftInstructionType::HOLD) {
+        return preview;
+    }
+
+    const double turnDirection = instruction.holdTurnDirection >= 0 ? 1.0 : -1.0;
+    const Vec2 axis = directionVectorForHeading(instruction.targetHeading);
+    const Vec2 lateralAxis = Vec2{
+        rightNormalForHeading(instruction.targetHeading).x * turnDirection,
+        rightNormalForHeading(instruction.targetHeading).y * turnDirection
+    };
+    const double radiusNm = std::max(instruction.holdTurnRadiusNm, aircraft.getTurnRadiusNm());
+    const Vec2 lateralOffset{lateralAxis.x * radiusNm * 2.0, lateralAxis.y * radiusNm * 2.0};
+    const Vec2 longitudinalOffset{axis.x * instruction.holdLegLengthNm, axis.y * instruction.holdLegLengthNm};
+
+    preview.visible = true;
+    preview.firstStraightStart = instruction.holdEntryPosition;
+    preview.firstStraightEnd = Vec2{
+        instruction.holdEntryPosition.x + longitudinalOffset.x,
+        instruction.holdEntryPosition.y + longitudinalOffset.y
+    };
+    preview.secondStraightStart = Vec2{
+        preview.firstStraightEnd.x + lateralOffset.x,
+        preview.firstStraightEnd.y + lateralOffset.y
+    };
+    preview.secondStraightEnd = Vec2{
+        instruction.holdEntryPosition.x + lateralOffset.x,
+        instruction.holdEntryPosition.y + lateralOffset.y
+    };
+    preview.firstTurnCenter = Vec2{
+        preview.firstStraightEnd.x + lateralAxis.x * radiusNm,
+        preview.firstStraightEnd.y + lateralAxis.y * radiusNm
+    };
+    preview.secondTurnCenter = Vec2{
+        instruction.holdEntryPosition.x + lateralAxis.x * radiusNm,
+        instruction.holdEntryPosition.y + lateralAxis.y * radiusNm
+    };
+    preview.radiusNm = radiusNm;
+    preview.firstTurnStartAngleDeg = std::atan2(
+        preview.firstStraightEnd.y - preview.firstTurnCenter.y,
+        preview.firstStraightEnd.x - preview.firstTurnCenter.x
+    ) * kRadToDeg;
+    preview.secondTurnStartAngleDeg = std::atan2(
+        preview.secondStraightEnd.y - preview.secondTurnCenter.y,
+        preview.secondStraightEnd.x - preview.secondTurnCenter.x
+    ) * kRadToDeg;
+    preview.turnDirectionSign = instruction.holdTurnDirection >= 0 ? 1 : -1;
+    return preview;
+}
+
 AltitudeCapturePreview buildAltitudeCapture(const Aircraft& aircraft,
                                             const std::vector<PredictedAircraftState>& prediction) {
     AltitudeCapturePreview preview;
@@ -200,6 +252,11 @@ AltitudeCapturePreview buildAltitudeCapture(const Aircraft& aircraft,
 
 GuidancePreview GuidancePreviewService::build(const Aircraft& aircraft) {
     GuidancePreview preview;
+    preview.hold = buildHoldPreview(aircraft);
+    if (preview.hold.visible) {
+        return preview;
+    }
+
     const double horizonSeconds = computePredictionHorizonSeconds(aircraft);
     const auto predictedTrajectory = TrajectoryPredictor::predict(aircraft, horizonSeconds, kGuidanceStepSeconds);
 

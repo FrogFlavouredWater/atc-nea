@@ -2,14 +2,21 @@
 #include <cmath>
 #include <deque>
 #include <string>
-#include "backend/AircraftControl.h"
-#include "backend/AircraftMotion.h"
-#include "backend/AircraftPerformance.h"
+#include "backend/aircraft/AircraftControl.h"
+#include "backend/aircraft/AircraftMotion.h"
+#include "backend/aircraft/AircraftPerformance.h"
 #include "common/utils.h"
 
 struct AircraftTrailPoint {
     Vec2 position{};
     double recordedAtSeconds = 0.0;
+};
+
+enum class HoldPhase {
+    OUTBOUND,
+    TURN_INBOUND,
+    INBOUND,
+    TURN_OUTBOUND
 };
 
 class Aircraft {
@@ -27,8 +34,10 @@ private:
     bool conflictAlert;
     bool approachCleared = false;
     int assignedIlsAirportIndex = -1;
+    HoldPhase holdPhase = HoldPhase::OUTBOUND;
 
     void syncCommandToInstruction();
+    void updateHoldCommand();
     void updatePhaseFromInstruction();
     void recordTrailPoint();
     void trimTrailPoints();

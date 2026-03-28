@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/utils.h"
+
 enum class AircraftControlMode {
     AUTONOMOUS,
     MANUAL,
@@ -35,6 +37,10 @@ struct AircraftInstruction {
     double targetSpeed = 0.0;
     int targetAltitude = 0;
     AircraftControlMode controlMode = AircraftControlMode::AUTONOMOUS;
+    Vec2 holdEntryPosition{};
+    double holdLegLengthNm = 0.0;
+    double holdTurnRadiusNm = 0.0;
+    int holdTurnDirection = 1;
 };
 
 inline constexpr const char* toString(AircraftControlMode mode) {

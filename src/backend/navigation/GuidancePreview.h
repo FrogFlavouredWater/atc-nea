@@ -31,10 +31,26 @@ struct AltitudeCapturePreview {
     double timeSeconds = 0.0;
 };
 
+struct HoldPreview {
+    bool visible = false;
+    Vec2 firstStraightStart{};
+    Vec2 firstStraightEnd{};
+    Vec2 secondStraightStart{};
+    Vec2 secondStraightEnd{};
+    Vec2 firstTurnCenter{};
+    Vec2 secondTurnCenter{};
+    double radiusNm = 0.0;
+    double firstTurnStartAngleDeg = 0.0;
+    double secondTurnStartAngleDeg = 0.0;
+    double turnSweepAngleDeg = 180.0;
+    int turnDirectionSign = 1;
+};
+
 struct GuidancePreview {
     HeadingVectorPreview headingVector{};
     TurnArcPreview turnArc{};
     AltitudeCapturePreview altitudeCapture{};
+    HoldPreview hold{};
 };
 
 class Aircraft;

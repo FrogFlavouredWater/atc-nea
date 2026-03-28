@@ -1,9 +1,9 @@
 #pragma once
-#include "backend/Aircraft.h"
-#include "backend/GuidancePreview.h"
-#include "backend/SpawnService.h"
-#include "backend/TrajectoryPredictor.h"
-#include "backend/airport.h"
+#include "backend/aircraft/Aircraft.h"
+#include "backend/navigation/GuidancePreview.h"
+#include "backend/traffic/SpawnService.h"
+#include "backend/navigation/TrajectoryPredictor.h"
+#include "backend/navigation/airport.h"
 #include "common/constants.h"
 #include "common/utils.h"
 #include <map>
@@ -13,9 +13,8 @@
 #include <vector>
 
 struct ConflictResolutionState {
-    std::pair<std::string, std::string> pair{};
+    std::pair<std::string, std::string> conflictPair{};
     AircraftInstruction resumeInstruction{};
-    AircraftInstruction activeInstruction{};
     double assignedAtSeconds = 0.0;
 };
 
@@ -25,6 +24,7 @@ private:
     std::vector<Airport> airports;
     size_t outOfBoundsCount = 0;
     size_t landedCount = 0;
+    size_t hullLossCount = 0;
     SimSettings settings = SimConfig::DEFAULTS;
     SpawnService spawnService;
     SpawnRequestResult lastSpawnResult{};
@@ -41,16 +41,24 @@ private:
                                       const std::vector<PredictedAircraftState>& secondPrediction) const;
     Aircraft* findAircraftByCallsign(const std::string& callsign);
     const Aircraft* findAircraftByCallsign(const std::string& callsign) const;
+    Aircraft* findAircraft(const Aircraft* plane);
+    const Aircraft* findAircraft(const Aircraft* plane) const;
+    double estimateArrivalTimeSeconds(const Aircraft& plane, const Airport& airport) const;
     bool canCaptureIls(const Aircraft& plane, const Airport& airport) const;
     AircraftCommand buildIlsCommand(const Aircraft& plane, const Airport& airport) const;
     std::vector<PredictedConflictAssessment> collectResolvableConflicts() const;
-    std::vector<AircraftInstruction> buildResolutionCandidates(const Aircraft& plane, const Aircraft& other) const;
+    std::vector<AircraftInstruction> buildResolutionCandidates(const Aircraft& plane,
+                                                               const Aircraft& other,
+                                                               const PredictedConflictAssessment& conflict) const;
     PredictedConflictAssessment assessConflictWithInstruction(const Aircraft& plane,
                                                               const AircraftInstruction& instruction,
                                                               const Aircraft& other) const;
+    void applyArrivalSpacingControls();
+    void updateArrivalSequencing();
     void releaseResolvedAircraft();
     void updateConflictResolutions();
     bool hasReachedRunway(const Aircraft& plane, const Airport& airport) const;
+    void removeCollidedAircraft();
     void removeLandedAircraft();
     void removeOutOfBoundsAircraft();
     void updateAutonomousCommands(double deltaTime);
@@ -62,6 +70,8 @@ public:
     SpawnRequestResult requestRandomSpawn();
     void clearLastSpawnResult();
     bool issueInstruction(const Aircraft* plane, const AircraftInstruction& instruction);
+    bool issueHoldAtCurrentPosition(const Aircraft* plane);
+    bool releaseHold(const Aircraft* plane);
     bool issueCommand(const Aircraft* plane, const AircraftCommand& command);
     bool toggleApproachClearance(const Aircraft* plane);
     void addAirport(const Airport& airport);
@@ -77,6 +87,7 @@ public:
     size_t getAircraftCount() const { return aircraft.size(); }
     size_t getOutOfBoundsCount() const { return outOfBoundsCount; }
     size_t getLandedCount() const { return landedCount; }
+    size_t getHullLossCount() const { return hullLossCount; }
     size_t getPredictedConflictCount() const { return predictedConflicts.size(); }
     const SpawnRequestResult& getLastSpawnResult() const { return lastSpawnResult; }
     const std::vector<PredictedConflictAssessment>& getPredictedConflicts() const { return predictedConflicts; }

@@ -1,4 +1,4 @@
-#include "backend/SpawnService.h"
+#include "backend/traffic/SpawnService.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -13,6 +13,7 @@ constexpr double kAltitudePerNmFt = 55.0;
 constexpr int kAltitudeFloorFt = 3000;
 constexpr int kAltitudeCeilingFt = 9000;
 constexpr int kAltitudeBandFt = 2500;
+constexpr int kAltitudeStepFt = 1000;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kRadToDeg = 180.0 / kPi;
 
@@ -37,6 +38,28 @@ Vec2 resolveSpawnTarget(const SimSettings& settings, const std::vector<Airport>&
         (settings.minXNm + settings.maxXNm) / 2.0,
         (settings.minYNm + settings.maxYNm) / 2.0
     };
+}
+
+int chooseSpawnAltitudeFt(std::mt19937& rng, const SpawnEntryPoint& entryPoint) {
+    std::vector<int> availableLevelsFt;
+    const int firstRoundedLevelFt =
+        static_cast<int>(std::ceil(static_cast<double>(entryPoint.altitudeMinFt) / kAltitudeStepFt)) * kAltitudeStepFt;
+    const int lastRoundedLevelFt =
+        static_cast<int>(std::floor(static_cast<double>(entryPoint.altitudeMaxFt) / kAltitudeStepFt)) * kAltitudeStepFt;
+
+    for (int altitudeFt = firstRoundedLevelFt; altitudeFt <= lastRoundedLevelFt; altitudeFt += kAltitudeStepFt) {
+        availableLevelsFt.push_back(altitudeFt);
+    }
+
+    if (availableLevelsFt.empty()) {
+        const int midpointFt = (entryPoint.altitudeMinFt + entryPoint.altitudeMaxFt) / 2;
+        const int roundedMidpointFt =
+            static_cast<int>(std::lround(static_cast<double>(midpointFt) / kAltitudeStepFt)) * kAltitudeStepFt;
+        return std::clamp(roundedMidpointFt, kAltitudeFloorFt, kAltitudeCeilingFt);
+    }
+
+    std::uniform_int_distribution<size_t> levelIndexDist(0, availableLevelsFt.size() - 1);
+    return availableLevelsFt[levelIndexDist(rng)];
 }
 }
 
@@ -126,13 +149,12 @@ std::vector<SpawnEntryPoint> SpawnService::buildEntryPoints(const SimSettings& s
 
 SpawnCandidate SpawnService::buildCandidate(const SpawnEntryPoint& entryPoint) {
     std::uniform_real_distribution<double> speedDist(entryPoint.speedMinKts, entryPoint.speedMaxKts);
-    std::uniform_int_distribution<int> altitudeDist(entryPoint.altitudeMinFt, entryPoint.altitudeMaxFt);
 
     return SpawnCandidate{
         entryPoint.position,
         sampleHeading(entryPoint.headingMinDeg, entryPoint.headingMaxDeg),
         speedDist(rng),
-        altitudeDist(rng),
+        chooseSpawnAltitudeFt(rng, entryPoint),
         generateCallsign(),
         entryPoint.label
     };

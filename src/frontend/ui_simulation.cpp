@@ -22,7 +22,7 @@ void drawSelectedAircraftDetails(const Aircraft& aircraft, bool debugEnabled) {
              70,
              20,
              selectedColor);
-    DrawText("Controls: A/D heading, W/S speed, Q/E altitude, I ILS clr, ,/. sim speed", 10, 95, 16, GRAY);
+    DrawText("Controls: A/D heading, W/S speed, Q/E altitude, H hold/release, I ILS clr, ,/. sim speed", 10, 95, 16, GRAY);
 
     if (!debugEnabled) {
         return;
@@ -49,6 +49,7 @@ void drawSelectedAircraftDetails(const Aircraft& aircraft, bool debugEnabled) {
 SimulationViewResult UI::DrawSimulationHUD(int aircraftCount,
                                            int outOfBoundsCount,
                                            int landedCount,
+                                           int hullLossCount,
                                            int predictedConflictCount,
                                            double simulationSpeed,
                                            bool& debugEnabled,
@@ -56,7 +57,15 @@ SimulationViewResult UI::DrawSimulationHUD(int aircraftCount,
     SimulationViewResult result;
     GuiLoadStyleDefault();
     DrawText(TextFormat("Aircraft: %i", aircraftCount), 10, 10, 20, DARKGRAY);
-    DrawText(TextFormat("Out: %i  Landed: %i  Predicted: %i", outOfBoundsCount, landedCount, predictedConflictCount), 10, 38, 20, DARKGRAY);
+    DrawText(TextFormat("Out: %i  Landed: %i  Hull: %i  Predicted: %i",
+                        outOfBoundsCount,
+                        landedCount,
+                        hullLossCount,
+                        predictedConflictCount),
+             10,
+             38,
+             20,
+             DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
     DrawText(TextFormat("SimSpeed: %.1f", simulationSpeed), GetScreenWidth() - 145, 40, 20, WHITE);
 
@@ -140,6 +149,7 @@ SimulationViewResult UI::DrawSimulation(const Simulation& sim,
     const SimulationViewResult result = DrawSimulationHUD(static_cast<int>(sim.getAircraft().size()),
                                                           static_cast<int>(sim.getOutOfBoundsCount()),
                                                           static_cast<int>(sim.getLandedCount()),
+                                                          static_cast<int>(sim.getHullLossCount()),
                                                           static_cast<int>(sim.getPredictedConflictCount()),
                                                           settings.sim.simulationSpeed,
                                                           debugEnabled,
@@ -155,6 +165,34 @@ SimulationViewResult UI::DrawSimulation(const Simulation& sim,
 }
 
 void UI::DrawGuidancePreview(const GuidancePreview& preview, const SimSettings& simSettings, bool debugEnabled) {
+    if (preview.hold.visible) {
+        DrawLineEx(NMToPixels(preview.hold.firstStraightStart, simSettings),
+                   NMToPixels(preview.hold.firstStraightEnd, simSettings),
+                   2.0f,
+                   ui_detail::kGuidanceYellow);
+        DrawLineEx(NMToPixels(preview.hold.secondStraightStart, simSettings),
+                   NMToPixels(preview.hold.secondStraightEnd, simSettings),
+                   2.0f,
+                   ui_detail::kGuidanceYellow);
+        ui_detail::drawArcSegmentNm(preview.hold.firstTurnCenter,
+                                    preview.hold.radiusNm,
+                                    preview.hold.firstTurnStartAngleDeg,
+                                    preview.hold.turnSweepAngleDeg,
+                                    preview.hold.turnDirectionSign,
+                                    ui_detail::kGuidanceYellow,
+                                    2.0f,
+                                    simSettings);
+        ui_detail::drawArcSegmentNm(preview.hold.secondTurnCenter,
+                                    preview.hold.radiusNm,
+                                    preview.hold.secondTurnStartAngleDeg,
+                                    preview.hold.turnSweepAngleDeg,
+                                    preview.hold.turnDirectionSign,
+                                    ui_detail::kGuidanceYellow,
+                                    2.0f,
+                                    simSettings);
+        return;
+    }
+
     if (preview.headingVector.visible) {
         DrawLineEx(NMToPixels(preview.headingVector.start, simSettings),
                    NMToPixels(preview.headingVector.end, simSettings),

@@ -5,30 +5,64 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(atc)
 
-target_sources(atc PRIVATE
+set(APP_SOURCES
     src/app/main.cpp
     src/app/engine.cpp
+)
+
+set(FRONTEND_SOURCES
     src/frontend/ui.cpp
     src/frontend/ui_menu.cpp
     src/frontend/ui_simulation.cpp
+)
+
+set(COMMON_SOURCES
     src/common/utils.cpp
     src/common/logger.cpp
-    src/backend/Aircraft.cpp
-    src/backend/AircraftMotion.cpp
-    src/backend/GuidancePreview.cpp
-    src/backend/AircraftPerformance.h
-    src/backend/SpawnService.cpp
-    src/backend/TrajectoryPredictor.cpp
-    src/backend/airport.cpp
-    src/backend/Simulation.cpp
-    src/backend/Aircraft.h
-    src/backend/AircraftControl.h
-    src/backend/AircraftMotion.h
-    src/backend/GuidancePreview.h
-    src/backend/SpawnService.h
-    src/backend/TrajectoryPredictor.h
-    src/backend/airport.h
-    src/backend/Simulation.h
+)
+
+set(BACKEND_AIRCRAFT_FILES
+    src/backend/aircraft/Aircraft.cpp
+    src/backend/aircraft/Aircraft.h
+    src/backend/aircraft/AircraftControl.h
+    src/backend/aircraft/AircraftMotion.cpp
+    src/backend/aircraft/AircraftMotion.h
+    src/backend/aircraft/AircraftPerformance.h
+)
+
+set(BACKEND_NAVIGATION_FILES
+    src/backend/navigation/GuidancePreview.cpp
+    src/backend/navigation/GuidancePreview.h
+    src/backend/navigation/TrajectoryPredictor.cpp
+    src/backend/navigation/TrajectoryPredictor.h
+    src/backend/navigation/airport.cpp
+    src/backend/navigation/airport.h
+)
+
+set(BACKEND_TRAFFIC_FILES
+    src/backend/traffic/SpawnService.cpp
+    src/backend/traffic/SpawnService.h
+)
+
+set(BACKEND_SIMULATION_FILES
+    src/backend/simulation/Simulation.h
+    src/backend/simulation/SimCleanup.cpp
+    src/backend/simulation/SimConflict.cpp
+    src/backend/simulation/SimCtrl.cpp
+    src/backend/simulation/SimFlow.cpp
+    src/backend/simulation/SimRun.cpp
+    src/backend/simulation/SimUtil.h
+    src/backend/simulation/SimUtil.cpp
+)
+
+target_sources(atc PRIVATE
+    ${APP_SOURCES}
+    ${FRONTEND_SOURCES}
+    ${COMMON_SOURCES}
+    ${BACKEND_AIRCRAFT_FILES}
+    ${BACKEND_NAVIGATION_FILES}
+    ${BACKEND_TRAFFIC_FILES}
+    ${BACKEND_SIMULATION_FILES}
 )
 
 target_compile_features(atc PRIVATE cxx_std_23)

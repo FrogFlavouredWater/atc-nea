@@ -164,6 +164,16 @@ void Engine::handleInput() {
         sim.toggleApproachClearance(selectedAircraft);
     }
 
+    if (selectedAircraft
+        && selectedAircraft->getControlMode() != AircraftControlMode::ILS
+        && IsKeyPressed(KEY_H)) {
+        if (selectedAircraft->getInstructionType() == AircraftInstructionType::HOLD) {
+            sim.releaseHold(selectedAircraft);
+        } else {
+            sim.issueHoldAtCurrentPosition(selectedAircraft);
+        }
+    }
+
     if (selectedAircraft && selectedAircraft->getControlMode() != AircraftControlMode::ILS) {
         const AircraftCommand currentCommand = selectedAircraft->getCommand();
         AircraftInstruction instruction{

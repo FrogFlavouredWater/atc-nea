@@ -1,7 +1,7 @@
 #pragma once
 
-#include "backend/AircraftControl.h"
-#include "backend/AircraftPerformance.h"
+#include "backend/aircraft/AircraftControl.h"
+#include "backend/aircraft/AircraftPerformance.h"
 #include "common/utils.h"
 
 struct AircraftMotionState {

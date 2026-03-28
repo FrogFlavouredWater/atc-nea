@@ -1,7 +1,7 @@
 #pragma once
 #include "common/constants.h"
 #include "frontend/ui.h"
-#include "backend/Simulation.h"
+#include "backend/simulation/Simulation.h"
 #include <memory>
 
 class Engine {

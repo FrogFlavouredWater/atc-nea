@@ -1,10 +1,12 @@
-#include "backend/TrajectoryPredictor.h"
+#include "backend/navigation/TrajectoryPredictor.h"
 #include "common/constants.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
 namespace {
+constexpr double kTacticalHorizontalThresholdNm = 5.0;
+
 double horizontalDistanceNm(const AircraftMotionState& first, const AircraftMotionState& second) {
     const double dx = first.position.x - second.position.x;
     const double dy = first.position.y - second.position.y;
@@ -20,7 +22,7 @@ double severityScore(double horizontalDistanceNm,
                      double timeToClosestApproachSeconds,
                      double horizonSeconds) {
     const double horizontalPenalty = std::max(0.0,
-        (SeparationRules::HORIZONTAL_NM - horizontalDistanceNm) / SeparationRules::HORIZONTAL_NM);
+        (kTacticalHorizontalThresholdNm - horizontalDistanceNm) / kTacticalHorizontalThresholdNm);
     const double verticalPenalty = std::max(0.0,
         (SeparationRules::VERTICAL_FT - verticalDistanceFt) / SeparationRules::VERTICAL_FT);
     const double timeWeight = horizonSeconds > 0.0
@@ -40,18 +42,16 @@ std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft&
     std::vector<PredictedAircraftState> prediction;
     prediction.reserve(static_cast<size_t>(horizonSeconds / stepSeconds) + 2);
 
-    AircraftMotionState motion = aircraft.getMotionState();
-    const AircraftCommand& command = aircraft.getCommand();
-    const AircraftPerformance& performance = aircraft.getPerformance();
+    Aircraft simulatedAircraft = aircraft;
 
-    prediction.push_back({0.0, motion});
+    prediction.push_back({0.0, simulatedAircraft.getMotionState()});
 
     double elapsedSeconds = 0.0;
     while (elapsedSeconds < horizonSeconds) {
         const double delta = std::min(stepSeconds, horizonSeconds - elapsedSeconds);
-        stepAircraftMotion(motion, command, performance, delta);
+        simulatedAircraft.update(delta);
         elapsedSeconds += delta;
-        prediction.push_back({elapsedSeconds, motion});
+        prediction.push_back({elapsedSeconds, simulatedAircraft.getMotionState()});
     }
 
     return prediction;
@@ -75,6 +75,10 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
     assessment.valid = true;
     assessment.firstCallsign = first.getCallsign();
     assessment.secondCallsign = second.getCallsign();
+    assessment.currentHorizontalDistanceNm = horizontalDistanceNm(firstPrediction.front().motion,
+                                                                  secondPrediction.front().motion);
+    assessment.currentVerticalDistanceFt = verticalDistanceFt(firstPrediction.front().motion,
+                                                              secondPrediction.front().motion);
 
     double fallbackHorizontalDistanceNm = std::numeric_limits<double>::max();
     double fallbackVerticalDistanceFt = std::numeric_limits<double>::max();
@@ -84,12 +88,25 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
     for (size_t i = 0; i < sampleCount; ++i) {
         const double horizontal = horizontalDistanceNm(firstPrediction[i].motion, secondPrediction[i].motion);
         const double vertical = verticalDistanceFt(firstPrediction[i].motion, secondPrediction[i].motion);
+        const bool breachesTacticalThreshold = horizontal < kTacticalHorizontalThresholdNm
+            && vertical < SeparationRules::VERTICAL_FT;
         const bool breachesSeparation = horizontal < SeparationRules::HORIZONTAL_NM
             && vertical < SeparationRules::VERTICAL_FT;
         const double sampleTime = firstPrediction[i].timeSeconds;
         const double sampleSeverity = severityScore(horizontal, vertical, sampleTime, horizonSeconds);
 
+        if (!assessment.breachesTacticalThreshold && breachesTacticalThreshold) {
+            assessment.breachesTacticalThreshold = true;
+            assessment.timeToTacticalThresholdSeconds = sampleTime;
+            assessment.tacticalHorizontalDistanceNm = horizontal;
+            assessment.tacticalVerticalDistanceFt = vertical;
+        }
+
         if (breachesSeparation) {
+            if (assessment.timeToSeparationLossSeconds < 0.0) {
+                assessment.timeToSeparationLossSeconds = sampleTime;
+            }
+
             const bool isBetterBreach = !assessment.breachesSeparation
                 || sampleSeverity > bestBreachSeverity
                 || (std::abs(sampleSeverity - bestBreachSeverity) < 1e-6

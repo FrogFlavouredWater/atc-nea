@@ -1,8 +1,8 @@
 #pragma once
 #include "raylib.h"
-#include "backend/GuidancePreview.h"
+#include "backend/navigation/GuidancePreview.h"
 #include "common/constants.h"
-#include "backend/Simulation.h"
+#include "backend/simulation/Simulation.h"
 
 enum class MainMenuAction {
     NONE,
@@ -29,6 +29,7 @@ public:
     SimulationViewResult DrawSimulationHUD(int aircraftCount,
                                            int outOfBoundsCount,
                                            int landedCount,
+                                           int hullLossCount,
                                            int predictedConflictCount,
                                            double simulationSpeed,
                                            bool& debugEnabled,
