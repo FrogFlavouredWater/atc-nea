@@ -1,5 +1,8 @@
-#include "backend/navigation/TrajectoryPredictor.h"
-#include "common/constants.h"
+#include "sim/TrajectoryPredictor.h"
+
+#include "core/Config.h"
+#include "core/MathUtils.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -8,9 +11,7 @@ namespace {
 constexpr double kTacticalHorizontalThresholdNm = 5.0;
 
 double horizontalDistanceNm(const AircraftMotionState& first, const AircraftMotionState& second) {
-    const double dx = first.position.x - second.position.x;
-    const double dy = first.position.y - second.position.y;
-    return std::sqrt(dx * dx + dy * dy);
+    return distanceNm(first.position, second.position);
 }
 
 double verticalDistanceFt(const AircraftMotionState& first, const AircraftMotionState& second) {
@@ -21,6 +22,7 @@ double severityScore(double horizontalDistanceNm,
                      double verticalDistanceFt,
                      double timeToClosestApproachSeconds,
                      double horizonSeconds) {
+    // Severity is a simple heuristic: closer and sooner conflicts score higher.
     const double horizontalPenalty = std::max(0.0,
         (kTacticalHorizontalThresholdNm - horizontalDistanceNm) / kTacticalHorizontalThresholdNm);
     const double verticalPenalty = std::max(0.0,
@@ -34,7 +36,7 @@ double severityScore(double horizontalDistanceNm,
 
 std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft& aircraft,
                                                                  double horizonSeconds,
-                                                                 double stepSeconds) {
+                                                                 double stepSeconds) const {
     if (horizonSeconds < 0.0 || stepSeconds <= 0.0) {
         return {};
     }
@@ -44,6 +46,8 @@ std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft&
 
     Aircraft simulatedAircraft = aircraft;
 
+    // Include the current state at t=0 so callers can compare "now" against the
+    // later sampled points with one consistent array.
     prediction.push_back({0.0, simulatedAircraft.getMotionState()});
 
     double elapsedSeconds = 0.0;
@@ -60,7 +64,7 @@ std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft&
 PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& first,
                                                                 const Aircraft& second,
                                                                 double horizonSeconds,
-                                                                double stepSeconds) {
+                                                                double stepSeconds) const {
     if (horizonSeconds < 0.0 || stepSeconds <= 0.0) {
         return {};
     }
@@ -71,6 +75,8 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
         return {};
     }
 
+    // Start with the current pair geometry so callers can compare "already bad"
+    // against "will become bad soon" from the same assessment object.
     PredictedConflictAssessment assessment;
     assessment.valid = true;
     assessment.firstCallsign = first.getCallsign();
@@ -83,7 +89,10 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
     double fallbackHorizontalDistanceNm = std::numeric_limits<double>::max();
     double fallbackVerticalDistanceFt = std::numeric_limits<double>::max();
     double bestBreachSeverity = -1.0;
+    bool foundSeparationLoss = false;
 
+    // Walk both predicted paths in lockstep and keep the earliest tactical
+    // breach plus the closest/worst sample over the lookahead horizon.
     const size_t sampleCount = std::min(firstPrediction.size(), secondPrediction.size());
     for (size_t i = 0; i < sampleCount; ++i) {
         const double horizontal = horizontalDistanceNm(firstPrediction[i].motion, secondPrediction[i].motion);
@@ -96,18 +105,16 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
         const double sampleSeverity = severityScore(horizontal, vertical, sampleTime, horizonSeconds);
 
         if (!assessment.breachesTacticalThreshold && breachesTacticalThreshold) {
+            // Record only the first tactical breach time; later samples are more
+            // useful for "closest approach" than for intervention timing.
             assessment.breachesTacticalThreshold = true;
             assessment.timeToTacticalThresholdSeconds = sampleTime;
-            assessment.tacticalHorizontalDistanceNm = horizontal;
-            assessment.tacticalVerticalDistanceFt = vertical;
         }
 
         if (breachesSeparation) {
-            if (assessment.timeToSeparationLossSeconds < 0.0) {
-                assessment.timeToSeparationLossSeconds = sampleTime;
-            }
-
-            const bool isBetterBreach = !assessment.breachesSeparation
+            // Once separation is actually lost, keep the worst breach sample so
+            // the resolver scores the most dangerous point in the encounter.
+            const bool isBetterBreach = !foundSeparationLoss
                 || sampleSeverity > bestBreachSeverity
                 || (std::abs(sampleSeverity - bestBreachSeverity) < 1e-6
                     && sampleTime < assessment.timeToClosestApproachSeconds);
@@ -117,19 +124,19 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
             }
 
             bestBreachSeverity = sampleSeverity;
-            assessment.breachesSeparation = true;
+            foundSeparationLoss = true;
             assessment.timeToClosestApproachSeconds = sampleTime;
-            assessment.horizontalDistanceNm = horizontal;
-            assessment.verticalDistanceFt = vertical;
-            assessment.firstMotion = firstPrediction[i].motion;
-            assessment.secondMotion = secondPrediction[i].motion;
+            assessment.closestHorizontalDistanceNm = horizontal;
+            assessment.closestVerticalDistanceFt = vertical;
             continue;
         }
 
-        if (assessment.breachesSeparation) {
+        if (foundSeparationLoss) {
             continue;
         }
 
+        // If the pair never loses separation, still keep the closest sample so
+        // the detector/resolver can reason about "near miss" situations.
         const bool isCloser = horizontal < fallbackHorizontalDistanceNm
             || (std::abs(horizontal - fallbackHorizontalDistanceNm) < 1e-6 && vertical < fallbackVerticalDistanceFt);
         if (!isCloser) {
@@ -139,14 +146,12 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
         fallbackHorizontalDistanceNm = horizontal;
         fallbackVerticalDistanceFt = vertical;
         assessment.timeToClosestApproachSeconds = sampleTime;
-        assessment.horizontalDistanceNm = horizontal;
-        assessment.verticalDistanceFt = vertical;
-        assessment.firstMotion = firstPrediction[i].motion;
-        assessment.secondMotion = secondPrediction[i].motion;
+        assessment.closestHorizontalDistanceNm = horizontal;
+        assessment.closestVerticalDistanceFt = vertical;
     }
 
-    assessment.severityScore = severityScore(assessment.horizontalDistanceNm,
-                                             assessment.verticalDistanceFt,
+    assessment.severityScore = severityScore(assessment.closestHorizontalDistanceNm,
+                                             assessment.closestVerticalDistanceFt,
                                              assessment.timeToClosestApproachSeconds,
                                              horizonSeconds);
     return assessment;

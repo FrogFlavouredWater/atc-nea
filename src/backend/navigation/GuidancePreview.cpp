@@ -1,6 +1,7 @@
 #include "backend/navigation/GuidancePreview.h"
 #include "backend/aircraft/Aircraft.h"
-#include "backend/navigation/TrajectoryPredictor.h"
+#include "core/MathUtils.h"
+#include "sim/TrajectoryPredictor.h"
 #include <algorithm>
 #include <cmath>
 
@@ -21,25 +22,11 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kRadToDeg = 180.0 / kPi;
 constexpr double kDegToRad = kPi / 180.0;
 
-Vec2 directionVectorForHeading(double headingDeg) {
-    return Vec2{
-        std::cos(kDegToRad * (headingDeg - 90.0)),
-        std::sin(kDegToRad * (headingDeg - 90.0))
-    };
-}
-
 Vec2 pointFromPolar(Vec2 center, double radiusNm, double angleDeg) {
     const double angleRad = angleDeg * kDegToRad;
     return Vec2{
         center.x + std::cos(angleRad) * radiusNm,
         center.y + std::sin(angleRad) * radiusNm
-    };
-}
-
-Vec2 rightNormalForHeading(double headingDeg) {
-    return Vec2{
-        std::cos(kDegToRad * headingDeg),
-        std::sin(kDegToRad * headingDeg)
     };
 }
 
@@ -54,13 +41,9 @@ double interpolateHeading(double fromHeading, double toHeading, double ratio) {
     return normalizeAngle(fromHeading + getShortestAngleDiff(toHeading, fromHeading) * ratio);
 }
 
-double distanceNm(Vec2 from, Vec2 to) {
-    const double dx = to.x - from.x;
-    const double dy = to.y - from.y;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
 double computePredictionHorizonSeconds(const Aircraft& aircraft) {
+    // Extend the preview long enough to show likely altitude capture, but keep
+    // it bounded so guidance drawing stays responsive.
     const double altitudeDiffFt = std::abs(static_cast<double>(aircraft.getTargetAltitude()) - aircraft.getAltitudeExact());
     if (altitudeDiffFt <= aircraft.getPerformance().altitudeCaptureToleranceFt) {
         return kGuidanceHorizonMinSeconds;
@@ -199,6 +182,8 @@ AltitudeCapturePreview buildAltitudeCapture(const Aircraft& aircraft,
     }
 
     for (size_t i = 1; i < prediction.size(); ++i) {
+        // Interpolate between predictor samples so the marker lands near the
+        // actual capture point instead of snapping to a coarse time step.
         const auto& previous = prediction[i - 1];
         const auto& current = prediction[i];
         const double previousAltitude = previous.motion.altitude;
@@ -251,6 +236,9 @@ AltitudeCapturePreview buildAltitudeCapture(const Aircraft& aircraft,
 }
 
 GuidancePreview GuidancePreviewService::build(const Aircraft& aircraft) {
+    // Guidance previews are built from the aircraft's current command state, so
+    // they reflect what the sim would do next without mutating live aircraft.
+    const TrajectoryPredictor predictor;
     GuidancePreview preview;
     preview.hold = buildHoldPreview(aircraft);
     if (preview.hold.visible) {
@@ -258,7 +246,7 @@ GuidancePreview GuidancePreviewService::build(const Aircraft& aircraft) {
     }
 
     const double horizonSeconds = computePredictionHorizonSeconds(aircraft);
-    const auto predictedTrajectory = TrajectoryPredictor::predict(aircraft, horizonSeconds, kGuidanceStepSeconds);
+    const auto predictedTrajectory = predictor.predict(aircraft, horizonSeconds, kGuidanceStepSeconds);
 
     preview.turnArc = buildTurnArc(aircraft);
     preview.headingVector = buildHeadingVector(aircraft, preview.turnArc);

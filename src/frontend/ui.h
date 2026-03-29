@@ -1,9 +1,12 @@
 #pragma once
-#include "raylib.h"
-#include "backend/navigation/GuidancePreview.h"
-#include "common/constants.h"
-#include "backend/simulation/Simulation.h"
 
+#include "core/Types.h"
+#include "raylib.h"
+
+class Aircraft;
+class Simulation;
+
+// UI only renders and reports lightweight user intent back to Engine.
 enum class MainMenuAction {
     NONE,
     START,
@@ -16,8 +19,15 @@ struct SettingsMenuResult {
     bool closeRequested = false;
 };
 
+enum class PauseMenuAction {
+    NONE,
+    RESUME,
+    RETURN_TO_MENU
+};
+
 struct SimulationViewResult {
     bool spawnRequested = false;
+    bool toggleDebugRequested = false;
 };
 
 class UI {
@@ -26,30 +36,16 @@ public:
 
     MainMenuAction DrawMainMenu();
     SettingsMenuResult DrawSettingsMenu(AppSettings& settings);
-    SimulationViewResult DrawSimulationHUD(int aircraftCount,
-                                           int outOfBoundsCount,
-                                           int landedCount,
-                                           int hullLossCount,
-                                           int predictedConflictCount,
-                                           double simulationSpeed,
-                                           bool& debugEnabled,
-                                           const SpawnRequestResult& spawnResult);
-    void DrawPauseMenu(GameState& currentState);
-    void DrawBackground();
-    void DrawRangeRings(Vec2 airportPos, const SimSettings& simSettings);
+    PauseMenuAction DrawPauseMenu();
 
     SimulationViewResult DrawSimulation(const Simulation& sim,
                                         const AppSettings& settings,
-                                        bool& debugEnabled,
-                                        Aircraft* selectedAircraft);
-    
-    // Units conversion
+                                        bool debugEnabled,
+                                        const Aircraft* selectedAircraft);
+
     static Vector2 NMToPixels(Vec2 nmPos, const SimSettings& simSettings);
     static double NMToPixels(double nmDistance, const SimSettings& simSettings);
+    // Radar clicks are converted back into sim-space before Engine asks the
+    // Simulation to hit-test or issue commands.
     static Vec2 PixelsToNM(Vector2 pixelPos, const SimSettings& simSettings);
-private:
-    void DrawAircraftTrail(const Aircraft& aircraft, const SimSettings& simSettings, bool selected);
-    void DrawAircraft(const Aircraft& aircraft, const SimSettings& simSettings, bool selected);
-    void DrawAirport(const Airport& airport, const SimSettings& simSettings);
-    void DrawGuidancePreview(const GuidancePreview& preview, const SimSettings& simSettings, bool debugEnabled);
 };

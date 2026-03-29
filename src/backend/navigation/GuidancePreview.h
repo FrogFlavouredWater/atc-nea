@@ -1,7 +1,9 @@
 #pragma once
 
-#include "common/utils.h"
+#include "core/Types.h"
 
+// These preview structs are render-only geometry derived from the aircraft's
+// current command state. They do not mutate the simulation.
 struct HeadingVectorPreview {
     bool visible = false;
     Vec2 start{};

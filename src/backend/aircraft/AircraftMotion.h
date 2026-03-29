@@ -1,9 +1,10 @@
 #pragma once
 
-#include "backend/aircraft/AircraftControl.h"
 #include "backend/aircraft/AircraftPerformance.h"
-#include "common/utils.h"
+#include "core/Types.h"
 
+// Motion state stays in sim units: nautical miles laterally, feet vertically,
+// knots for speed, and degrees for heading.
 struct AircraftMotionState {
     Vec2 position{};
     Vec2 velocity{};

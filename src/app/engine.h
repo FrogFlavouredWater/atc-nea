@@ -1,17 +1,19 @@
 #pragma once
-#include "common/constants.h"
-#include "frontend/ui.h"
-#include "backend/simulation/Simulation.h"
-#include <memory>
 
+#include "sim/Simulation.h"
+#include "core/Config.h"
+#include "frontend/ui.h"
+
+// Engine owns the top-level app flow: window lifecycle, state transitions,
+// input dispatch, and coordination between UI and Simulation.
 class Engine {
     private:
-        static Engine instance;
         GameState currentState;
         UI ui;
         Simulation sim;
         Aircraft* selectedAircraft{};
         AppSettings settings = AppConfig::DEFAULTS;
+        // Settings edits stay here until the user presses Apply.
         AppSettings pendingSettings = AppConfig::DEFAULTS;
         bool showingSettings = false;
 
@@ -21,7 +23,17 @@ class Engine {
         void constructWindow();
         void applySettings();
 
-        void handleInput();
+        void handleGlobalInput();
+        void handleSimulationInput();
+        void handleMainMenuAction(MainMenuAction action);
+        void handleSettingsMenuResult(const SettingsMenuResult& result);
+        void handleSimulationViewResult(const SimulationViewResult& result);
+        void handlePauseMenuAction(PauseMenuAction action);
+        void updateRunning(double deltaTime);
+        void validateSelection();
+        void renderMenu();
+        void renderRunning();
+        void renderPaused();
         void spawnInitialTraffic();
 
     public:

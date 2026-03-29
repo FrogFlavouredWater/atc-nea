@@ -1,11 +1,12 @@
 #pragma once
+
+#include "backend/aircraft/AircraftMotion.h"
+#include "backend/aircraft/AircraftPerformance.h"
+#include "core/MathUtils.h"
+
 #include <cmath>
 #include <deque>
 #include <string>
-#include "backend/aircraft/AircraftControl.h"
-#include "backend/aircraft/AircraftMotion.h"
-#include "backend/aircraft/AircraftPerformance.h"
-#include "common/utils.h"
 
 struct AircraftTrailPoint {
     Vec2 position{};
@@ -19,6 +20,8 @@ enum class HoldPhase {
     TURN_OUTBOUND
 };
 
+// Aircraft owns the live state for a single target: motion, current command,
+// higher-level instruction state, and the visible trail used by the UI.
 class Aircraft {
 private:
     AircraftPerformance performance;
@@ -78,10 +81,13 @@ public:
     void setAssignedIlsAirportIndex(int airportIndex) { assignedIlsAirportIndex = airportIndex; }
     void clearAssignedIlsAirportIndex() { assignedIlsAirportIndex = -1; }
 
+    // Separation checks use the tactical minima; collision checks use the
+    // smaller visual overlap rule plus a narrow vertical band.
     [[nodiscard]] double distanceTo(const Aircraft& other) const;
     [[nodiscard]] double altitudeDifferenceTo(const Aircraft& other) const;
     [[nodiscard]] bool breachesSeparationWith(const Aircraft& other) const;
-    [[nodiscard]] bool collidesWith(const Aircraft& other) const;
+    [[nodiscard]] bool overlapsSpriteWith(const Aircraft& other, double squareSideNm) const;
+    [[nodiscard]] bool collidesWith(const Aircraft& other, double squareSideNm) const;
 
     void update(double deltaTime);
 };

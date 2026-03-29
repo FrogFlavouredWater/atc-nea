@@ -1,4 +1,6 @@
 #include "backend/aircraft/AircraftMotion.h"
+
+#include "core/MathUtils.h"
 #include <algorithm>
 #include <cmath>
 
@@ -83,6 +85,7 @@ void updateAltitude(AircraftMotionState& motion,
 }
 
 void initializeAircraftMotion(AircraftMotionState& motion, const AircraftPerformance& performance) {
+    // Normalize the initial state once so later stepping can assume sane values.
     motion.heading = normalizeAngle(motion.heading);
     motion.speed = std::clamp(motion.speed, performance.minSpeedKts, performance.maxSpeedKts);
     motion.altitude = std::max(0.0, motion.altitude);
@@ -95,6 +98,8 @@ void stepAircraftMotion(AircraftMotionState& motion,
                         const AircraftCommand& command,
                         const AircraftPerformance& performance,
                         double deltaTime) {
+    // Update order matters here: speed affects turn dynamics, then heading and
+    // altitude respond to the command, then velocity/position are integrated.
     updateSpeed(motion, command, performance, deltaTime);
     updateTurnDynamics(motion, performance);
     updateHeading(motion, command, deltaTime);

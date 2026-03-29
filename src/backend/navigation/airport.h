@@ -1,11 +1,13 @@
 #pragma once
 
-#include "common/utils.h"
+#include "core/Types.h"
+#include <utility>
 #include <string>
 #include <vector>
 #include <cmath>
 
 struct LocalizerSector {
+    // Each sector widens or narrows the usable signal cone as range increases.
     double range;      // NM
     double width;      // Degrees (total arc width)
 };
@@ -20,6 +22,8 @@ struct Localizer {
     bool isWithinSignal(Vec2 airportPos, double runwayHeading, Vec2 targetPos) const;
 };
 
+// Airport bundles the runway/localizer geometry the backend needs for capture
+// checks and the UI needs for rendering.
 struct Airport
 {
     std::string name;
@@ -28,7 +32,12 @@ struct Airport
     double runwayLength = 2.0;
     Localizer localizer;
 
-    bool inLocalizerSignal(Vec2 pos) const {
+    [[nodiscard]] bool inLocalizerSignal(Vec2 pos) const {
         return localizer.isWithinSignal(position, runwayHeading, pos);
     }
+    [[nodiscard]] double alongTrackToRunway(Vec2 pos) const;
+    [[nodiscard]] double crossTrackError(Vec2 pos) const;
+    [[nodiscard]] double minLocalizerRange() const;
+    [[nodiscard]] std::pair<double, double> ilsCaptureAltitudeBandFt(double alongTrackNm) const;
+    [[nodiscard]] double ilsProfileAltitudeFt(Vec2 aircraftPosition, double currentAltitudeFt) const;
 };

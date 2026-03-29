@@ -1,6 +1,8 @@
 #pragma once
+
 #include <string>
 
+// Minimal static logging facade used throughout the simulator.
 class Logger {
 public:
     static void debug(const std::string& msg);

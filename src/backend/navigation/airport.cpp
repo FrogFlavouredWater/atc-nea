@@ -1,24 +1,35 @@
 #include "backend/navigation/airport.h"
-#include <cmath>
 
-#ifndef PI
-#define PI 3.14159265358979323846
-#endif
+#include "core/Config.h"
+#include "core/MathUtils.h"
+
+#include <algorithm>
+#include <cmath>
+#include <numbers>
+
+namespace {
+double interpolateLinear(double input,
+                         double inputStart,
+                         double inputEnd,
+                         double outputStart,
+                         double outputEnd) {
+    if (std::abs(inputEnd - inputStart) < 1e-6) {
+        return outputEnd;
+    }
+
+    const double t = std::clamp((input - inputStart) / (inputEnd - inputStart), 0.0, 1.0);
+    return outputStart + (outputEnd - outputStart) * t;
+}
+}
 
 bool Localizer::isWithinSignal(Vec2 airportPos, double runwayHeading, Vec2 targetPos) const {
-    double dx = targetPos.x - airportPos.x;
-    double dy = targetPos.y - airportPos.y;
-    double distance = std::sqrt(dx * dx + dy * dy);
+    const double dx = targetPos.x - airportPos.x;
+    const double dy = targetPos.y - airportPos.y;
+    const double distance = std::sqrt(dx * dx + dy * dy);
 
-    // The localizer signal extends from the airport in the direction of the approach.
-    // If runwayHeading is the landing direction, the signal is at runwayHeading + 180.
-    double signalCenterHeading = normalizeAngle(runwayHeading + 180.0);
-    
-    // Calculate heading from airport to target position
-    // heading 0 is North (-Y), 90 is East (+X)
-    double angleToTarget = normalizeAngle(std::atan2(dx, -dy) * (180.0 / PI));
-    
-    double angleDiff = std::abs(getShortestAngleDiff(signalCenterHeading, angleToTarget));
+    const double signalCenterHeading = normalizeAngle(runwayHeading + 180.0);
+    const double angleToTarget = normalizeAngle(std::atan2(dx, -dy) * (180.0 / std::numbers::pi_v<double>));
+    const double angleDiff = std::abs(getShortestAngleDiff(signalCenterHeading, angleToTarget));
 
     for (const auto& sector : sectors) {
         if (distance <= sector.range && angleDiff <= (sector.width / 2.0)) {
@@ -26,4 +37,71 @@ bool Localizer::isWithinSignal(Vec2 airportPos, double runwayHeading, Vec2 targe
         }
     }
     return false;
+}
+
+double Airport::alongTrackToRunway(Vec2 pos) const {
+    const Vec2 runwayDirection = directionVectorForHeading(runwayHeading);
+    const Vec2 toRunway{
+        position.x - pos.x,
+        position.y - pos.y
+    };
+    return dot(toRunway, runwayDirection);
+}
+
+double Airport::crossTrackError(Vec2 pos) const {
+    const Vec2 relativeToRunway{
+        pos.x - position.x,
+        pos.y - position.y
+    };
+    return dot(relativeToRunway, rightNormalForHeading(runwayHeading));
+}
+
+double Airport::minLocalizerRange() const {
+    if (localizer.sectors.empty()) {
+        return 0.0;
+    }
+
+    double minRangeNm = localizer.sectors.front().range;
+    for (const auto& sector : localizer.sectors) {
+        minRangeNm = std::min(minRangeNm, sector.range);
+    }
+    return minRangeNm;
+}
+
+std::pair<double, double> Airport::ilsCaptureAltitudeBandFt(double alongTrackNm) const {
+    if (alongTrackNm > minLocalizerRange()) {
+        return {SimTuning::ILS_OUTER_CAPTURE_MIN_ALTITUDE_FT, SimTuning::ILS_OUTER_CAPTURE_MAX_ALTITUDE_FT};
+    }
+
+    return {SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT, SimTuning::ILS_INNER_CAPTURE_MAX_ALTITUDE_FT};
+}
+
+double Airport::ilsProfileAltitudeFt(Vec2 aircraftPosition, double currentAltitudeFt) const {
+    // Use a piecewise linear profile so aircraft descend smoothly from outer
+    // capture through final, while never being told to climb on the glidepath.
+    const double alongTrackNm = std::clamp(alongTrackToRunway(aircraftPosition), 0.0, localizer.length);
+    const double innerRegionBoundaryNm = minLocalizerRange();
+    double desiredAltitudeFt = 0.0;
+
+    if (alongTrackNm > innerRegionBoundaryNm) {
+        desiredAltitudeFt = interpolateLinear(alongTrackNm,
+                                              innerRegionBoundaryNm,
+                                              localizer.length,
+                                              SimTuning::ILS_OUTER_CAPTURE_MIN_ALTITUDE_FT,
+                                              SimTuning::ILS_OUTER_CAPTURE_MAX_ALTITUDE_FT);
+    } else if (alongTrackNm > SimTuning::ILS_FINAL_DESCENT_START_NM) {
+        desiredAltitudeFt = interpolateLinear(alongTrackNm,
+                                              SimTuning::ILS_FINAL_DESCENT_START_NM,
+                                              innerRegionBoundaryNm,
+                                              SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT,
+                                              SimTuning::ILS_INNER_CAPTURE_MAX_ALTITUDE_FT);
+    } else {
+        desiredAltitudeFt = interpolateLinear(alongTrackNm,
+                                              0.0,
+                                              SimTuning::ILS_FINAL_DESCENT_START_NM,
+                                              0.0,
+                                              SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT);
+    }
+
+    return std::min(desiredAltitudeFt, currentAltitudeFt);
 }

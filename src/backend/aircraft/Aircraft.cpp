@@ -1,8 +1,9 @@
 #include "backend/aircraft/Aircraft.h"
-#include "common/constants.h"
-#include "backend/aircraft/AircraftMotion.h"
+
+#include "core/Config.h"
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace {
 constexpr double kCommandEpsilon = 0.01;
@@ -12,41 +13,14 @@ constexpr double kHoldTurnCompletionHeadingToleranceDeg = 8.0;
 constexpr double kHoldTurnCompletionLateralToleranceNm = 0.2;
 constexpr double kHoldTurnMinimumRadiusNm = 0.25;
 
-double distanceNm(Vec2 from, Vec2 to) {
-    const double dx = to.x - from.x;
-    const double dy = to.y - from.y;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
-Vec2 directionVectorForHeading(double headingDeg) {
-    constexpr double kPi = 3.14159265358979323846;
-    constexpr double kDegToRad = kPi / 180.0;
-    return Vec2{
-        std::cos(kDegToRad * (headingDeg - 90.0)),
-        std::sin(kDegToRad * (headingDeg - 90.0))
-    };
-}
-
-Vec2 rightNormalForHeading(double headingDeg) {
-    constexpr double kPi = 3.14159265358979323846;
-    constexpr double kDegToRad = kPi / 180.0;
-    return Vec2{
-        std::cos(kDegToRad * headingDeg),
-        std::sin(kDegToRad * headingDeg)
-    };
-}
-
-double dot(Vec2 first, Vec2 second) {
-    return first.x * second.x + first.y * second.y;
-}
-
 double bearingDeg(Vec2 from, Vec2 to) {
-    constexpr double kPi = 3.14159265358979323846;
-    constexpr double kRadToDeg = 180.0 / kPi;
+    constexpr double kRadToDeg = 180.0 / std::numbers::pi_v<double>;
     return normalizeAngle(std::atan2(to.y - from.y, to.x - from.x) * kRadToDeg + 90.0);
 }
 
 AircraftInstruction instructionFromCommand(const AircraftCommand& command) {
+    // Commands are lower-level targets; this helper wraps them back into the
+    // instruction model used everywhere else in the simulation.
     return AircraftInstruction{
         command.source == AircraftControlMode::ILS
             ? AircraftInstructionType::ILS_INTERCEPT
@@ -109,13 +83,21 @@ bool Aircraft::breachesSeparationWith(const Aircraft& other) const {
         && altitudeDifferenceTo(other) < SeparationRules::VERTICAL_FT;
 }
 
-bool Aircraft::collidesWith(const Aircraft& other) const {
-    return breachesSeparationWith(other);
+bool Aircraft::overlapsSpriteWith(const Aircraft& other, double squareSideNm) const {
+    const double dx = std::abs(motion.position.x - other.motion.position.x);
+    const double dy = std::abs(motion.position.y - other.motion.position.y);
+    return dx <= squareSideNm && dy <= squareSideNm;
+}
+
+bool Aircraft::collidesWith(const Aircraft& other, double squareSideNm) const {
+    return overlapsSpriteWith(other, squareSideNm)
+        && altitudeDifferenceTo(other) < CollisionRules::VERTICAL_FT;
 }
 
 void Aircraft::update(double deltaTime) {
     trailElapsedSeconds += deltaTime;
     if (activeInstruction.type == AircraftInstructionType::HOLD) {
+        // HOLD is the only instruction that owns its own internal state machine.
         updateHoldCommand();
     }
     stepAircraftMotion(motion, command, performance, deltaTime);
@@ -159,6 +141,8 @@ void Aircraft::syncCommandToInstruction() {
 }
 
 void Aircraft::updateHoldCommand() {
+    // The hold is modelled as two straight legs joined by two standard-rate
+    // turns. The current phase chooses which target heading to command next.
     const double legLengthNm = std::max(activeInstruction.holdLegLengthNm, 0.5);
     const double turnRadiusNm = std::max(activeInstruction.holdTurnRadiusNm, kHoldTurnMinimumRadiusNm);
     const double outboundHeading = normalizeAngle(activeInstruction.targetHeading);
@@ -254,6 +238,8 @@ void Aircraft::updateHoldCommand() {
 }
 
 void Aircraft::updatePhaseFromInstruction() {
+    // Phase is a UI/scheduling-facing summary, so derive it from the active
+    // instruction rather than trying to manage it separately everywhere.
     if (phase == FlightPhase::LANDING || phase == FlightPhase::EXITED) {
         return;
     }
@@ -293,6 +279,7 @@ void Aircraft::applyInstruction(const AircraftInstruction& newInstruction) {
     activeInstruction.holdTurnDirection = newInstruction.holdTurnDirection >= 0 ? 1 : -1;
 
     if (enteringHold) {
+        // Re-entering a hold always restarts from the outbound leg.
         holdPhase = HoldPhase::OUTBOUND;
     }
 

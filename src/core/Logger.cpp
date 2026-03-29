@@ -1,7 +1,9 @@
-#include "common/logger.h"
-#include <iostream>
-#include <iomanip>
+#include "core/Logger.h"
 
+#include <iostream>
+
+// These log helpers write ANSI-coloured console output when the terminal
+// supports it. The simulator only relies on the text, not the colour.
 void Logger::debug(const std::string& msg) {
     std::cout << "\033[90m[DEBUG]\033[0m      " << msg << std::endl;
 }
@@ -47,6 +49,7 @@ void Logger::spacer() {
 }
 
 void Logger::test() {
+    // Handy for checking log formatting while developing locally.
     Logger::info("Info message");
     Logger::debug("Debug message");
     Logger::warn("Warning message");

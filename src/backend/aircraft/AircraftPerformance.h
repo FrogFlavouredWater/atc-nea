@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numbers>
 
+// This is a single generic performance model shared by all spawned aircraft.
 struct AircraftPerformance {
     double minSpeedKts = 120.0;
     double maxSpeedKts = 320.0;
@@ -17,10 +18,6 @@ struct AircraftPerformance {
 };
 
 inline double calculateTurnRateDegPerSec(double speedKts, const AircraftPerformance& performance) {
-    // if (speedKts <= 1.0) { // divide by zero prevention on ILS final
-    //     return performance.maxTurnRateDegPerSec;
-    // }
-
     const double bankAngleRad = performance.bankAngleDegrees * std::numbers::pi_v<double> / 180.0;
     const double turnRate = 1091.0 * std::tan(bankAngleRad) / speedKts; // approximation for turn rate (deg/s)
     return std::clamp(turnRate, performance.minTurnRateDegPerSec, performance.maxTurnRateDegPerSec);

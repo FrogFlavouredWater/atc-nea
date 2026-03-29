@@ -1,54 +1,19 @@
 #include "app/engine.h"
-#include "common/constants.h"
-#include "common/logger.h"
-#include "frontend/ui.h"
+
+#include "core/Config.h"
+#include "core/Logger.h"
 #include <raylib.h>
-#include <raymath.h>
 #include <algorithm>
 #include <sstream>
 #include <stdexcept>
 
-Engine Engine::instance;
-
 namespace {
 constexpr double kSimulationSpeedStep = 1.0;
-constexpr double kSimulationSpeedMin = 1.0;
-constexpr double kSimulationSpeedMax = 120.0;
-
-const char* screenModeName(ScreenMode mode) {
-    switch (mode) {
-    case ScreenMode::WINDOWED:
-        return "WINDOWED";
-    case ScreenMode::BORDERLESS_WINDOWED:
-        return "BORDERLESS_WINDOWED";
-    case ScreenMode::FULLSCREEN:
-        return "FULLSCREEN";
-    default:
-        return "UNKNOWN";
-    }
-}
-
-const char* gameStateName(GameState state) {
-    switch (state) {
-    case GameState::MENU:
-        return "MENU";
-    case GameState::RUNNING:
-        return "RUNNING";
-    case GameState::PAUSED:
-        return "PAUSED";
-    case GameState::GAME_OVER:
-        return "GAME_OVER";
-    case GameState::EXIT:
-        return "EXIT";
-    default:
-        return "UNKNOWN";
-    }
-}
 
 std::string describeDisplaySettings(const DisplaySettings& displaySettings) {
     std::ostringstream stream;
     stream << displaySettings.screenWidth << "x" << displaySettings.screenHeight
-           << ", mode=" << screenModeName(displaySettings.screenMode)
+           << ", mode=" << toString(displaySettings.screenMode)
            << ", target_fps=" << displaySettings.targetFps;
     return stream.str();
 }
@@ -71,7 +36,9 @@ std::string formatSimulationSpeed(double simulationSpeed) {
 }
 
 void applyDisplaySettings(const DisplaySettings& displaySettings) {
-    if (IsWindowFullscreen() && displaySettings.screenMode != ScreenMode::FULLSCREEN) {
+    // Normalize the native window state first so switching between windowed and
+    // borderless modes does not stack window flags unpredictably.
+    if (IsWindowFullscreen()) {
         ToggleFullscreen();
     }
 
@@ -91,13 +58,6 @@ void applyDisplaySettings(const DisplaySettings& displaySettings) {
         SetWindowSize(GetMonitorWidth(0), GetMonitorHeight(0));
         break;
 
-    case ScreenMode::FULLSCREEN:
-        ClearWindowState(FLAG_WINDOW_UNDECORATED);
-        if (!IsWindowFullscreen()) {
-            ToggleFullscreen();
-        }
-        break;
-
     default:
         throw std::runtime_error("Unhandled ScreenMode enum");
     }
@@ -109,10 +69,14 @@ void applyDisplaySettings(const DisplaySettings& displaySettings) {
 Engine::Engine() : currentState(GameState::MENU), ui{}, sim{}, selectedAircraft(nullptr) {}
 
 Engine& Engine::getInstance() {
+    static Engine instance;
     return instance;
 }
 
 void Engine::constructWindow() {
+    Config::clampAppSettings(settings);
+    pendingSettings = settings;
+
     Logger::info("Creating application window");
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(settings.display.screenWidth,
@@ -123,27 +87,42 @@ void Engine::constructWindow() {
 }
 
 void Engine::applySettings() {
+    Config::clampAppSettings(settings);
     Logger::info("Applying display settings: " + describeDisplaySettings(settings.display));
     Logger::info("Applying simulation settings: " + describeSimSettings(settings.sim));
     applyDisplaySettings(settings.display);
     sim.applySettings(settings.sim);
 }
 
-void Engine::handleInput() {
+void Engine::handleGlobalInput() {
+    if (!IsKeyPressed(KEY_P)) {
+        return;
+    }
+
+    if (currentState == GameState::RUNNING) {
+        currentState = GameState::PAUSED;
+    } else if (currentState == GameState::PAUSED) {
+        currentState = GameState::RUNNING;
+    }
+}
+
+void Engine::handleSimulationInput() {
     if (IsKeyPressed(KEY_COMMA)) {
         settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed - kSimulationSpeedStep,
-                                                  kSimulationSpeedMin,
-                                                  kSimulationSpeedMax);
+                                                  SimConfig::MIN_SIMULATION_SPEED,
+                                                  SimConfig::MAX_SIMULATION_SPEED);
         Logger::info("Simulation speed set to " + formatSimulationSpeed(settings.sim.simulationSpeed));
     }
     if (IsKeyPressed(KEY_PERIOD)) {
         settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed + kSimulationSpeedStep,
-                                                  kSimulationSpeedMin,
-                                                  kSimulationSpeedMax);
+                                                  SimConfig::MIN_SIMULATION_SPEED,
+                                                  SimConfig::MAX_SIMULATION_SPEED);
         Logger::info("Simulation speed set to " + formatSimulationSpeed(settings.sim.simulationSpeed));
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        // Selection is done in sim-space, so convert the screen click back into
+        // nautical miles before asking the simulation for a hit test.
         Aircraft* previousSelection = selectedAircraft;
         Vector2 mousePos = GetMousePosition();
         Vec2 nmMousePos = UI::PixelsToNM(mousePos, settings.sim);
@@ -175,6 +154,8 @@ void Engine::handleInput() {
     }
 
     if (selectedAircraft && selectedAircraft->getControlMode() != AircraftControlMode::ILS) {
+        // Manual vectoring edits the currently commanded targets, then sends the
+        // whole instruction back to the simulation in one go.
         const AircraftCommand currentCommand = selectedAircraft->getCommand();
         AircraftInstruction instruction{
             AircraftInstructionType::VECTOR,
@@ -216,7 +197,109 @@ void Engine::handleInput() {
     }
 }
 
+void Engine::handleMainMenuAction(MainMenuAction action) {
+    switch (action) {
+    case MainMenuAction::START:
+        currentState = GameState::RUNNING;
+        break;
+
+    case MainMenuAction::OPEN_SETTINGS:
+        Logger::info("Opening settings menu");
+        pendingSettings = settings;
+        showingSettings = true;
+        break;
+
+    case MainMenuAction::EXIT:
+        Logger::info("Exit requested from main menu");
+        currentState = GameState::EXIT;
+        break;
+
+    case MainMenuAction::NONE:
+        break;
+
+    default:
+        throw std::runtime_error("Unhandled MainMenuAction enum");
+    }
+}
+
+void Engine::handleSettingsMenuResult(const SettingsMenuResult& result) {
+    if (result.applyRequested) {
+        settings = pendingSettings;
+        applySettings();
+    }
+
+    if (result.closeRequested) {
+        Logger::info("Closing settings menu");
+        showingSettings = false;
+        pendingSettings = settings;
+    }
+}
+
+void Engine::handleSimulationViewResult(const SimulationViewResult& result) {
+    if (result.spawnRequested) {
+        const SpawnRequestResult spawnResult = sim.requestRandomSpawn();
+        if (spawnResult.success) {
+            selectedAircraft = spawnResult.aircraft;
+        }
+    }
+
+    if (result.toggleDebugRequested) {
+        debugEnabled = !debugEnabled;
+        Logger::info(std::string("Debug overlay ") + (debugEnabled ? "enabled" : "disabled"));
+    }
+}
+
+void Engine::handlePauseMenuAction(PauseMenuAction action) {
+    switch (action) {
+    case PauseMenuAction::NONE:
+        break;
+
+    case PauseMenuAction::RESUME:
+        currentState = GameState::RUNNING;
+        break;
+
+    case PauseMenuAction::RETURN_TO_MENU:
+        currentState = GameState::MENU;
+        break;
+
+    default:
+        throw std::runtime_error("Unhandled PauseMenuAction enum");
+    }
+}
+
+void Engine::updateRunning(double deltaTime) {
+    handleSimulationInput();
+    sim.update(deltaTime * settings.sim.simulationSpeed);
+    validateSelection();
+}
+
+void Engine::validateSelection() {
+    if (selectedAircraft && !sim.containsAircraft(selectedAircraft)) {
+        Logger::info("Selected aircraft left the simulation");
+        selectedAircraft = nullptr;
+    }
+}
+
+void Engine::renderMenu() {
+    if (showingSettings) {
+        handleSettingsMenuResult(ui.DrawSettingsMenu(pendingSettings));
+        return;
+    }
+
+    handleMainMenuAction(ui.DrawMainMenu());
+}
+
+void Engine::renderRunning() {
+    handleSimulationViewResult(ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft));
+}
+
+void Engine::renderPaused() {
+    ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
+    handlePauseMenuAction(ui.DrawPauseMenu());
+}
+
 void Engine::spawnInitialTraffic() {
+    // Seed a little traffic so the simulator starts with something to control.
     for (int i = 0; i < 3; ++i) {
         sim.requestRandomSpawn();
     }
@@ -232,20 +315,21 @@ void Engine::init() {
 }
 
 void Engine::update(double deltaTime) {
-    if (IsKeyPressed(KEY_P)) {
-        if (currentState == GameState::RUNNING) currentState = GameState::PAUSED;
-        else if (currentState == GameState::PAUSED) currentState = GameState::RUNNING;
-    }
+    handleGlobalInput();
 
-    if (currentState == GameState::RUNNING) {
-        handleInput();
-        double scaledDeltaTime = deltaTime * settings.sim.simulationSpeed;
-        sim.update(scaledDeltaTime);
+    switch (currentState) {
+    case GameState::RUNNING:
+        updateRunning(deltaTime);
+        break;
 
-        if (selectedAircraft && !sim.containsAircraft(selectedAircraft)) {
-            Logger::info("Selected aircraft left the simulation");
-            selectedAircraft = nullptr;
-        }
+    case GameState::MENU:
+    case GameState::PAUSED:
+    case GameState::GAME_OVER:
+    case GameState::EXIT:
+        break;
+
+    default:
+        throw std::runtime_error("Unhandled GameState enum");
     }
 }
 
@@ -255,71 +339,23 @@ void Engine::render() {
 
     switch (currentState) {
     case GameState::MENU:
-        if (showingSettings) {
-            SettingsMenuResult result = ui.DrawSettingsMenu(pendingSettings);
-
-            if (result.applyRequested) {
-                settings = pendingSettings;
-                applySettings();
-            }
-
-            if (result.closeRequested) {
-                Logger::info("Closing settings menu");
-                showingSettings = false;
-                pendingSettings = settings;
-            }
-        } else {
-            switch (ui.DrawMainMenu()) {
-            case MainMenuAction::START:
-                currentState = GameState::RUNNING;
-                break;
-
-            case MainMenuAction::OPEN_SETTINGS:
-                Logger::info("Opening settings menu");
-                pendingSettings = settings;
-                showingSettings = true;
-                break;
-
-            case MainMenuAction::EXIT:
-                Logger::info("Exit requested from main menu");
-                currentState = GameState::EXIT;
-                break;
-
-            case MainMenuAction::NONE:
-                break;
-
-            default:
-                throw std::runtime_error("Unhandled MainMenuAction enum");
-            }
-        }
+        renderMenu();
         break;
 
     case GameState::RUNNING:
-        {
-        const bool debugWasEnabled = debugEnabled;
-        if (const SimulationViewResult result = ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
-            result.spawnRequested) {
-            const SpawnRequestResult spawnResult = sim.requestRandomSpawn();
-            if (spawnResult.success) {
-                selectedAircraft = spawnResult.aircraft;
-            }
-        }
-        if (debugEnabled != debugWasEnabled) {
-            Logger::info(std::string("Debug overlay ") + (debugEnabled ? "enabled" : "disabled"));
-        }
-        }
+        renderRunning();
         break;
 
     case GameState::PAUSED:
-        ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
-        ui.DrawPauseMenu(currentState);
+        renderPaused();
         break;
 
     case GameState::GAME_OVER:
+    case GameState::EXIT:
         break;
 
     default:
-        throw std::runtime_error("Unhandled Mode enum");
+        throw std::runtime_error("Unhandled GameState enum");
     }
 
     EndDrawing();
@@ -329,15 +365,17 @@ void Engine::run() {
     Logger::info("Entering main loop");
     GameState previousState = currentState;
     while (!shouldClose()) {
+        // Update and render stay explicit here so the frame loop remains easy to
+        // follow during debugging.
         double deltaTime = static_cast<double>(GetFrameTime());
         update(deltaTime);
         render();
 
         if (currentState != previousState) {
             Logger::info(std::string("Game state changed from ")
-                         + gameStateName(previousState)
+                         + toString(previousState)
                          + " to "
-                         + gameStateName(currentState));
+                         + toString(currentState));
             previousState = currentState;
         }
     }
