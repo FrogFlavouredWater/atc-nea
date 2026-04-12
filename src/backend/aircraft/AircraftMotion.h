@@ -20,4 +20,4 @@ void initializeAircraftMotion(AircraftMotionState& motion, const AircraftPerform
 void stepAircraftMotion(AircraftMotionState& motion,
                         const AircraftCommand& command,
                         const AircraftPerformance& performance,
-                        double deltaTime);
+                        double dt);

@@ -343,7 +343,7 @@ Color aircraftColor(const Aircraft& aircraft, bool selected) {
 } // namespace ui_detail
 
 namespace {
-void drawSelectedAircraftDetails(const Aircraft& aircraft, bool debugEnabled) {
+void drawSelectionDetails(const Aircraft& aircraft, bool showDebug) {
     Color selectedColor = YELLOW;
     if (aircraft.getControlMode() == AircraftControlMode::ILS) {
         selectedColor = ui_detail::kIlsBlue;
@@ -359,7 +359,7 @@ void drawSelectedAircraftDetails(const Aircraft& aircraft, bool debugEnabled) {
              16,
              GRAY);
 
-    if (!debugEnabled) {
+    if (!showDebug) {
         return;
     }
 
@@ -661,22 +661,22 @@ PauseMenuAction UI::DrawPauseMenu() {
     return PauseMenuAction::NONE;
 }
 
-Vector2 UI::NMToPixels(Vec2 nmPos, const SimSettings& simSettings) {
+Vector2 UI::NMToPixels(Vec2 nmPos, const SimSettings& sim) {
     // The radar origin is the screen centre, with sim-space measured in NM.
     return Vector2{
-        static_cast<float>(GetScreenWidth() / 2 + nmPos.x * simSettings.pixelsPerNm),
-        static_cast<float>(GetScreenHeight() / 2 + nmPos.y * simSettings.pixelsPerNm)
+        static_cast<float>(GetScreenWidth() / 2 + nmPos.x * sim.pixelsPerNm),
+        static_cast<float>(GetScreenHeight() / 2 + nmPos.y * sim.pixelsPerNm)
     };
 }
 
-double UI::NMToPixels(double nmDistance, const SimSettings& simSettings) {
-    return nmDistance * simSettings.pixelsPerNm;
+double UI::NMToPixels(double nmDistance, const SimSettings& sim) {
+    return nmDistance * sim.pixelsPerNm;
 }
 
-Vec2 UI::PixelsToNM(Vector2 pixelPos, const SimSettings& simSettings) {
+Vec2 UI::PixelsToNM(Vector2 pixelPos, const SimSettings& sim) {
     return Vec2{
-        static_cast<double>(pixelPos.x - GetScreenWidth() / 2) / simSettings.pixelsPerNm,
-        static_cast<double>(pixelPos.y - GetScreenHeight() / 2) / simSettings.pixelsPerNm
+        static_cast<double>(pixelPos.x - GetScreenWidth() / 2) / sim.pixelsPerNm,
+        static_cast<double>(pixelPos.y - GetScreenHeight() / 2) / sim.pixelsPerNm
     };
 }
 
@@ -686,9 +686,9 @@ SimulationViewResult drawSimulationHud(int aircraftCount,
                                        int landedCount,
                                        int hullLossCount,
                                        int predictedConflictCount,
-                                       double simulationSpeed,
-                                       bool debugEnabled,
-                                       const SpawnRequestResult& spawnResult) {
+                                       double speed,
+                                       bool showDebug,
+                                       const SpawnRequestResult& spawn) {
     // HUD buttons only report intent; Engine decides what those clicks do.
     SimulationViewResult result;
     GuiLoadStyleDefault();
@@ -703,11 +703,11 @@ SimulationViewResult drawSimulationHud(int aircraftCount,
              20,
              DARKGRAY);
     DrawText("P = Pause", GetScreenWidth() - 100, 10, 16, DARKGRAY);
-    DrawText(TextFormat("SimSpeed: %.1f", simulationSpeed), GetScreenWidth() - 145, 40, 20, WHITE);
+    DrawText(TextFormat("SimSpeed: %.1f", speed), GetScreenWidth() - 145, 40, 20, WHITE);
 
-    if (!spawnResult.message.empty()) {
-        const Color messageColor = spawnResult.success ? Color{152, 223, 115, 255} : Color{255, 190, 102, 255};
-        DrawText(spawnResult.message.c_str(), 10, GetScreenHeight() - 28, 18, messageColor);
+    if (!spawn.message.empty()) {
+        const Color messageColor = spawn.success ? Color{152, 223, 115, 255} : Color{255, 190, 102, 255};
+        DrawText(spawn.message.c_str(), 10, GetScreenHeight() - 28, 18, messageColor);
     }
 
     const double buttonWidth = 92.0;
@@ -719,7 +719,7 @@ SimulationViewResult drawSimulationHud(int aircraftCount,
     if (GuiButton(Rectangle{static_cast<float>(spawnButtonX), static_cast<float>(buttonY), static_cast<float>(buttonWidth), static_cast<float>(buttonHeight)}, "SPAWN")) {
         result.spawnRequested = true;
     }
-    if (GuiButton(Rectangle{static_cast<float>(buttonX), static_cast<float>(buttonY), static_cast<float>(buttonWidth), static_cast<float>(buttonHeight)}, debugEnabled ? "DEBUG: ON" : "DEBUG: OFF")) {
+    if (GuiButton(Rectangle{static_cast<float>(buttonX), static_cast<float>(buttonY), static_cast<float>(buttonWidth), static_cast<float>(buttonHeight)}, showDebug ? "DEBUG: ON" : "DEBUG: OFF")) {
         result.toggleDebugRequested = true;
     }
 
@@ -730,12 +730,12 @@ void drawBackground() {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK);
 }
 
-void drawRangeRings(Vec2 airportPos, const SimSettings& simSettings) {
+void drawRangeRings(Vec2 airportPos, const SimSettings& sim) {
     constexpr float kRings[] = {5.0f, 10.0f, 20.0f, 30.0f, 40.0f};
-    const Vector2 center = UI::NMToPixels(airportPos, simSettings);
+    const Vector2 center = UI::NMToPixels(airportPos, sim);
 
     for (const float radiusNm : kRings) {
-        const float pixelRadius = static_cast<float>(UI::NMToPixels(radiusNm, simSettings));
+        const float pixelRadius = static_cast<float>(UI::NMToPixels(radiusNm, sim));
         DrawCircleLinesV(center, pixelRadius, Fade(DARKGRAY, 0.9f));
         DrawText(TextFormat("%0.f NM", radiusNm),
                  static_cast<int>(center.x) + 5,
@@ -745,16 +745,16 @@ void drawRangeRings(Vec2 airportPos, const SimSettings& simSettings) {
     }
 }
 
-void drawGuidancePreviewVisual(const GuidancePreview& preview, const SimSettings& simSettings, bool debugEnabled) {
+void drawGuidancePreview(const GuidancePreview& preview, const SimSettings& sim, bool showDebug) {
     // Holds get their own dedicated preview because they are already a complete
     // path; the turn/vector/altitude previews are drawn separately otherwise.
     if (preview.hold.visible) {
-        DrawLineEx(UI::NMToPixels(preview.hold.firstStraightStart, simSettings),
-                   UI::NMToPixels(preview.hold.firstStraightEnd, simSettings),
+        DrawLineEx(UI::NMToPixels(preview.hold.firstStraightStart, sim),
+                   UI::NMToPixels(preview.hold.firstStraightEnd, sim),
                    2.0f,
                    ui_detail::kGuidanceYellow);
-        DrawLineEx(UI::NMToPixels(preview.hold.secondStraightStart, simSettings),
-                   UI::NMToPixels(preview.hold.secondStraightEnd, simSettings),
+        DrawLineEx(UI::NMToPixels(preview.hold.secondStraightStart, sim),
+                   UI::NMToPixels(preview.hold.secondStraightEnd, sim),
                    2.0f,
                    ui_detail::kGuidanceYellow);
         ui_detail::drawArcSegmentNm(preview.hold.firstTurnCenter,
@@ -764,7 +764,7 @@ void drawGuidancePreviewVisual(const GuidancePreview& preview, const SimSettings
                                     preview.hold.turnDirectionSign,
                                     ui_detail::kGuidanceYellow,
                                     2.0f,
-                                    simSettings);
+                                    sim);
         ui_detail::drawArcSegmentNm(preview.hold.secondTurnCenter,
                                     preview.hold.radiusNm,
                                     preview.hold.secondTurnStartAngleDeg,
@@ -772,13 +772,13 @@ void drawGuidancePreviewVisual(const GuidancePreview& preview, const SimSettings
                                     preview.hold.turnDirectionSign,
                                     ui_detail::kGuidanceYellow,
                                     2.0f,
-                                    simSettings);
+                                    sim);
         return;
     }
 
     if (preview.headingVector.visible) {
-        DrawLineEx(UI::NMToPixels(preview.headingVector.start, simSettings),
-                   UI::NMToPixels(preview.headingVector.end, simSettings),
+        DrawLineEx(UI::NMToPixels(preview.headingVector.start, sim),
+                   UI::NMToPixels(preview.headingVector.end, sim),
                    2.0f,
                    ui_detail::kGuidanceYellow);
     }
@@ -791,7 +791,7 @@ void drawGuidancePreviewVisual(const GuidancePreview& preview, const SimSettings
                                     preview.turnArc.directionSign,
                                     Fade(ui_detail::kGuidanceYellow, 0.9f),
                                     2.0f,
-                                    simSettings);
+                                    sim);
     }
 
     if (preview.altitudeCapture.visible) {
@@ -802,10 +802,10 @@ void drawGuidancePreviewVisual(const GuidancePreview& preview, const SimSettings
                                     preview.altitudeCapture.directionSign,
                                     ui_detail::kGuidanceYellow,
                                     2.5f,
-                                    simSettings);
+                                    sim);
 
-        if (debugEnabled) {
-            const Vector2 markerPos = UI::NMToPixels(preview.altitudeCapture.position, simSettings);
+        if (showDebug) {
+            const Vector2 markerPos = UI::NMToPixels(preview.altitudeCapture.position, sim);
             DrawText(TextFormat("ALT %.0fs", preview.altitudeCapture.timeSeconds),
                      static_cast<int>(markerPos.x + 8.0f),
                      static_cast<int>(markerPos.y - 12.0f),
@@ -815,7 +815,7 @@ void drawGuidancePreviewVisual(const GuidancePreview& preview, const SimSettings
     }
 }
 
-void drawAircraftTrailVisual(const Aircraft& aircraft, const SimSettings& simSettings, bool selected) {
+void drawAircraftTrail(const Aircraft& aircraft, const SimSettings& sim, bool selected) {
     const auto& trailPoints = aircraft.getTrailPoints();
     if (trailPoints.size() < 2) {
         return;
@@ -850,20 +850,20 @@ void drawAircraftTrailVisual(const Aircraft& aircraft, const SimSettings& simSet
             continue;
         }
 
-        DrawCircleV(UI::NMToPixels(trailPoint.position, simSettings),
+        DrawCircleV(UI::NMToPixels(trailPoint.position, sim),
                     dotRadius,
                     Fade(ui_detail::kTrackTrail, static_cast<float>(alpha)));
     }
 }
 
-void drawAircraftVisual(const Aircraft& aircraft, const SimSettings& simSettings, bool selected) {
+void drawAircraft(const Aircraft& aircraft, const SimSettings& sim, bool selected) {
     const Color color = ui_detail::aircraftColor(aircraft, selected);
 
-    drawAircraftTrailVisual(aircraft, simSettings, selected);
+    drawAircraftTrail(aircraft, sim, selected);
 
-    const int size = simSettings.aircraftSize;
+    const int size = sim.aircraftSize;
     const int halfSize = size / 2;
-    const Vector2 pixelPos = UI::NMToPixels(aircraft.getPosition(), simSettings);
+    const Vector2 pixelPos = UI::NMToPixels(aircraft.getPosition(), sim);
 
     DrawRectangleLinesEx(
         Rectangle{
@@ -889,9 +889,9 @@ void drawAircraftVisual(const Aircraft& aircraft, const SimSettings& simSettings
     }
 }
 
-void drawAirportVisual(const Airport& airport, const SimSettings& simSettings) {
-    const Vector2 pixelPos = UI::NMToPixels(airport.position, simSettings);
-    const float pixelRunwayLength = static_cast<float>(UI::NMToPixels(airport.runwayLength, simSettings));
+void drawAirport(const Airport& airport, const SimSettings& sim) {
+    const Vector2 pixelPos = UI::NMToPixels(airport.position, sim);
+    const float pixelRunwayLength = static_cast<float>(UI::NMToPixels(airport.runwayLength, sim));
 
     DrawRectanglePro(Rectangle{pixelPos.x, pixelPos.y, pixelRunwayLength, 10.0f},
                      Vector2{pixelRunwayLength / 2.0f, 5.0f},
@@ -909,7 +909,7 @@ void drawAirportVisual(const Airport& airport, const SimSettings& simSettings) {
     };
 
     DrawLineEx(pixelPos,
-               UI::NMToPixels(localizerEndNm, simSettings),
+               UI::NMToPixels(localizerEndNm, sim),
                2.0f,
                Fade(ui_detail::kIlsBlue, ui_detail::kIlsCenterlineAlpha));
 
@@ -930,8 +930,8 @@ void drawAirportVisual(const Airport& airport, const SimSettings& simSettings) {
             tickCenter.y + localizerNormal.y * halfTickLengthNm
         };
 
-        DrawLineEx(UI::NMToPixels(tickStart, simSettings),
-                   UI::NMToPixels(tickEnd, simSettings),
+        DrawLineEx(UI::NMToPixels(tickStart, sim),
+                   UI::NMToPixels(tickEnd, sim),
                    i % 5 == 0 ? 1.8f : 1.2f,
                    Fade(ui_detail::kIlsBlue, i % 5 == 0 ? ui_detail::kIlsMajorTickAlpha : ui_detail::kIlsMinorTickAlpha));
     }
@@ -950,10 +950,10 @@ void drawAirportVisual(const Airport& airport, const SimSettings& simSettings) {
             airport.position.y + rightDirection.y * sector.range
         };
 
-        DrawLineEx(pixelPos, UI::NMToPixels(leftEndNm, simSettings), 1.4f, Fade(ui_detail::kIlsBlue, ui_detail::kIlsBoundaryAlpha));
-        DrawLineEx(pixelPos, UI::NMToPixels(rightEndNm, simSettings), 1.4f, Fade(ui_detail::kIlsBlue, ui_detail::kIlsBoundaryAlpha));
-        DrawLineEx(UI::NMToPixels(leftEndNm, simSettings),
-                   UI::NMToPixels(rightEndNm, simSettings),
+        DrawLineEx(pixelPos, UI::NMToPixels(leftEndNm, sim), 1.4f, Fade(ui_detail::kIlsBlue, ui_detail::kIlsBoundaryAlpha));
+        DrawLineEx(pixelPos, UI::NMToPixels(rightEndNm, sim), 1.4f, Fade(ui_detail::kIlsBlue, ui_detail::kIlsBoundaryAlpha));
+        DrawLineEx(UI::NMToPixels(leftEndNm, sim),
+                   UI::NMToPixels(rightEndNm, sim),
                    1.0f,
                    Fade(ui_detail::kIlsBlue, ui_detail::kIlsSectorEdgeAlpha));
     }
@@ -968,23 +968,23 @@ void drawAirportVisual(const Airport& airport, const SimSettings& simSettings) {
 
 SimulationViewResult UI::DrawSimulation(const Simulation& sim,
                                         const AppSettings& settings,
-                                        bool debugEnabled,
-                                        const Aircraft* selectedAircraft) {
+                                        bool showDebug,
+                                        const Aircraft* selected) {
     // Draw order matters: static radar features first, then previews, then live
     // aircraft, then HUD/selection overlays on top.
     drawBackground();
 
     for (const auto& airport : sim.getAirports()) {
-        drawAirportVisual(airport, settings.sim);
+        drawAirport(airport, settings.sim);
         drawRangeRings(airport.position, settings.sim);
     }
 
-    if (selectedAircraft) {
-        drawGuidancePreviewVisual(sim.getGuidancePreview(selectedAircraft), settings.sim, debugEnabled);
+    if (selected) {
+        drawGuidancePreview(sim.getGuidancePreview(selected), settings.sim, showDebug);
     }
 
     for (const auto& plane : sim.getAircraft()) {
-        drawAircraftVisual(*plane, settings.sim, plane.get() == selectedAircraft);
+        drawAircraft(*plane, settings.sim, plane.get() == selected);
     }
 
     const SimulationViewResult result = drawSimulationHud(static_cast<int>(sim.getAircraft().size()),
@@ -993,11 +993,11 @@ SimulationViewResult UI::DrawSimulation(const Simulation& sim,
                                                           static_cast<int>(sim.getHullLossCount()),
                                                           static_cast<int>(sim.getPredictedConflictCount()),
                                                           settings.sim.simulationSpeed,
-                                                          debugEnabled,
+                                                          showDebug,
                                                           sim.getLastSpawnResult());
 
-    if (selectedAircraft) {
-        drawSelectedAircraftDetails(*selectedAircraft, debugEnabled);
+    if (selected) {
+        drawSelectionDetails(*selected, showDebug);
     } else {
         DrawText("Click aircraft to vector", 10, 70, 20, WHITE);
     }

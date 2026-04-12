@@ -25,27 +25,27 @@ void updateVelocity(AircraftMotionState& motion) {
 void updateSpeed(AircraftMotionState& motion,
                  const AircraftCommand& command,
                  const AircraftPerformance& performance,
-                 double deltaTime) {
+                 double dt) {
     const double speedDiff = command.targetSpeed - motion.speed;
     if (std::abs(speedDiff) <= kCommandEpsilon) {
         motion.speed = command.targetSpeed;
         return;
     }
 
-    const double speedStep = performance.accelerationKtsPerSec * deltaTime;
+    const double speedStep = performance.accelerationKtsPerSec * dt;
     const double actualStep = std::min(speedStep, std::abs(speedDiff));
     motion.speed += speedDiff > 0.0 ? actualStep : -actualStep;
     motion.speed = std::clamp(motion.speed, performance.minSpeedKts, performance.maxSpeedKts);
 }
 
-void updateHeading(AircraftMotionState& motion, const AircraftCommand& command, double deltaTime) {
+void updateHeading(AircraftMotionState& motion, const AircraftCommand& command, double dt) {
     const double headingDiff = getShortestAngleDiff(command.targetHeading, motion.heading);
     if (std::abs(headingDiff) <= kCommandEpsilon) {
         motion.heading = normalizeAngle(command.targetHeading);
         return;
     }
 
-    const double turnAmount = motion.turnRateDegPerSec * deltaTime;
+    const double turnAmount = motion.turnRateDegPerSec * dt;
     const double actualTurn = std::min(turnAmount, std::abs(headingDiff));
     motion.heading += headingDiff > 0.0 ? actualTurn : -actualTurn;
     motion.heading = normalizeAngle(motion.heading);
@@ -54,7 +54,7 @@ void updateHeading(AircraftMotionState& motion, const AircraftCommand& command, 
 void updateAltitude(AircraftMotionState& motion,
                     const AircraftCommand& command,
                     const AircraftPerformance& performance,
-                    double deltaTime) {
+                    double dt) {
     const double altitudeDiff = static_cast<double>(command.targetAltitude) - motion.altitude;
     if (std::abs(altitudeDiff) <= performance.altitudeCaptureToleranceFt) {
         motion.altitude = static_cast<double>(command.targetAltitude);
@@ -65,13 +65,13 @@ void updateAltitude(AircraftMotionState& motion,
     const double maxVerticalRateFpm = altitudeDiff > 0.0
         ? performance.climbRateFpm
         : performance.descentRateFpm;
-    const double altitudeStepFt = maxVerticalRateFpm * kMinutesPerSecond * deltaTime;
+    const double altitudeStepFt = maxVerticalRateFpm * kMinutesPerSecond * dt;
     const double actualStepFt = std::min(altitudeStepFt, std::abs(altitudeDiff));
 
     motion.altitude += altitudeDiff > 0.0 ? actualStepFt : -actualStepFt;
 
-    if (deltaTime > 0.0) {
-        const double actualVerticalRateFpm = actualStepFt / deltaTime / kMinutesPerSecond;
+    if (dt > 0.0) {
+        const double actualVerticalRateFpm = actualStepFt / dt / kMinutesPerSecond;
         motion.verticalSpeedFpm = altitudeDiff > 0.0 ? actualVerticalRateFpm : -actualVerticalRateFpm;
     } else {
         motion.verticalSpeedFpm = 0.0;
@@ -97,15 +97,15 @@ void initializeAircraftMotion(AircraftMotionState& motion, const AircraftPerform
 void stepAircraftMotion(AircraftMotionState& motion,
                         const AircraftCommand& command,
                         const AircraftPerformance& performance,
-                        double deltaTime) {
+                        double dt) {
     // Update order matters here: speed affects turn dynamics, then heading and
     // altitude respond to the command, then velocity/position are integrated.
-    updateSpeed(motion, command, performance, deltaTime);
+    updateSpeed(motion, command, performance, dt);
     updateTurnDynamics(motion, performance);
-    updateHeading(motion, command, deltaTime);
-    updateAltitude(motion, command, performance, deltaTime);
+    updateHeading(motion, command, dt);
+    updateAltitude(motion, command, performance, dt);
     updateVelocity(motion);
 
-    motion.position.x += motion.velocity.x * deltaTime;
-    motion.position.y += motion.velocity.y * deltaTime;
+    motion.position.x += motion.velocity.x * dt;
+    motion.position.y += motion.velocity.y * dt;
 }

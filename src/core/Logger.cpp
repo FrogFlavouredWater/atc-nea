@@ -2,46 +2,52 @@
 
 #include <iostream>
 
+namespace {
+void write(const char* tag, const char* color, const char* pad, const std::string& msg) {
+    std::cout << color << tag << "\033[0m" << pad << msg << std::endl;
+}
+}
+
 // These log helpers write ANSI-coloured console output when the terminal
 // supports it. The simulator only relies on the text, not the colour.
 void Logger::debug(const std::string& msg) {
-    std::cout << "\033[90m[DEBUG]\033[0m      " << msg << std::endl;
+    write("[DEBUG]", "\033[90m", "      ", msg);
 }
 
 void Logger::info(const std::string& msg) {
-    std::cout << "\033[36m[INFO]\033[0m       " << msg << std::endl;
+    write("[INFO]", "\033[36m", "       ", msg);
 }
 
 void Logger::warn(const std::string& msg) {
-    std::cout << "\033[33m[WARN]\033[0m       " << msg << std::endl;
+    write("[WARN]", "\033[33m", "       ", msg);
 }
 
 void Logger::error(const std::string& msg) {
-    std::cout << "\033[91m[ERROR]\033[0m      " << msg << std::endl;
+    write("[ERROR]", "\033[91m", "      ", msg);
 }
 
 void Logger::critical(const std::string& msg) {
-    std::cout << "\033[1;31m[CRITICAL]\033[0m   " << msg << std::endl;
+    write("[CRITICAL]", "\033[1;31m", "   ", msg);
 }
 
 void Logger::fatal(const std::string& msg) {
-    std::cout << "\033[1;4;31m[FATAL]\033[0m      " << msg << std::endl;
+    write("[FATAL]", "\033[1;4;31m", "      ", msg);
 }
 
 void Logger::success(const std::string& msg) {
-    std::cout << "\033[32m[SUCCESS]\033[0m    " << msg << std::endl;
+    write("[SUCCESS]", "\033[32m", "    ", msg);
 }
 
 void Logger::command(const std::string& msg) {
-    std::cout << "\033[34m[COMMAND]\033[0m    " << msg << std::endl;
+    write("[COMMAND]", "\033[34m", "    ", msg);
 }
 
 void Logger::ok(const std::string& msg) {
-    std::cout << "\033[32m[OK]\033[0m         " << msg << std::endl;
+    write("[OK]", "\033[32m", "         ", msg);
 }
 
 void Logger::fail(const std::string& msg) {
-    std::cout << "\033[91m[FAIL]\033[0m       " << msg << std::endl;
+    write("[FAIL]", "\033[91m", "       ", msg);
 }
 
 void Logger::spacer() {

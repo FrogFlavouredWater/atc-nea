@@ -3,8 +3,7 @@
 #include "core/Logger.h"
 #include <exception>
 
-// Keep main as a thin bootstrap so startup, shutdown, and fatal error handling
-// are easy to find in one place.
+//main stays as minimal boostrap
 int main() {
     try {
         Logger::info("Launching ATC Simulator");

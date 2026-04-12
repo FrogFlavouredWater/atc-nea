@@ -4,7 +4,7 @@
 #include <cmath>
 #include <numbers>
 
-// This is a single generic performance model shared by all spawned aircraft.
+//generic performance model shared by all spawned aircraft.
 struct AircraftPerformance {
     double minSpeedKts = 120.0;
     double maxSpeedKts = 320.0;

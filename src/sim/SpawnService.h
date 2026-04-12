@@ -57,9 +57,9 @@ private:
     std::mt19937 rng;
 
     [[nodiscard]] bool isSafe(const SpawnPlan& plan,
-                              const SimSettings& settings,
+                              const SimSettings& sim,
                               const std::vector<std::unique_ptr<Aircraft>>& aircraft,
                               const TrajectoryPredictor& predictor) const;
-    [[nodiscard]] std::array<SpawnPlan, 8> makePlans(const SimSettings& settings,
-                                                     const std::vector<Airport>& airports);
+    [[nodiscard]] std::array<SpawnPlan, 8> buildPlans(const SimSettings& sim,
+                                                      const std::vector<Airport>& airports);
 };

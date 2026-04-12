@@ -66,6 +66,33 @@ target_include_directories(atc PRIVATE
 
 set(_raylib_hints "")
 set(_raygui_hints "")
+set(_local_vcpkg_root "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed")
+
+if(EXISTS "${_local_vcpkg_root}")
+    set(_triplet_hints "")
+    if(DEFINED VCPKG_TARGET_TRIPLET)
+        list(APPEND _triplet_hints "${VCPKG_TARGET_TRIPLET}")
+    endif()
+
+    if(WIN32)
+        list(APPEND _triplet_hints "x64-windows")
+    elseif(APPLE)
+        list(APPEND _triplet_hints "arm64-osx" "x64-osx")
+    elseif(UNIX)
+        list(APPEND _triplet_hints "x64-linux")
+    endif()
+
+    list(REMOVE_DUPLICATES _triplet_hints)
+    foreach(_triplet IN LISTS _triplet_hints)
+        list(APPEND _raylib_hints
+            "${_local_vcpkg_root}/${_triplet}"
+            "${_local_vcpkg_root}/${_triplet}/share/raylib"
+        )
+        list(APPEND _raygui_hints
+            "${_local_vcpkg_root}/${_triplet}/include"
+        )
+    endforeach()
+endif()
 
 if(APPLE)
     list(APPEND _raylib_hints "/opt/homebrew/opt/raylib")

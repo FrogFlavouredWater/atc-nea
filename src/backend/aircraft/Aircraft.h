@@ -82,12 +82,11 @@ public:
     void clearAssignedIlsAirportIndex() { assignedIlsAirportIndex = -1; }
 
     // Separation checks use the tactical minima; collision checks use the
-    // smaller visual overlap rule plus a narrow vertical band.
+    // smaller visual collision box plus a narrow vertical band.
     [[nodiscard]] double distanceTo(const Aircraft& other) const;
     [[nodiscard]] double altitudeDifferenceTo(const Aircraft& other) const;
     [[nodiscard]] bool breachesSeparationWith(const Aircraft& other) const;
-    [[nodiscard]] bool overlapsSpriteWith(const Aircraft& other, double squareSideNm) const;
-    [[nodiscard]] bool collidesWith(const Aircraft& other, double squareSideNm) const;
+    [[nodiscard]] bool collidesWith(const Aircraft& other, double collisionBoxSizeNm) const;
 
-    void update(double deltaTime);
+    void update(double dt);
 };

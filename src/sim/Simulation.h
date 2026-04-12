@@ -33,30 +33,30 @@ private:
     std::set<std::pair<std::string, std::string>> activeConflictPairs;
     std::set<std::pair<std::string, std::string>> activePredictedConflictPairs;
     std::vector<PredictedConflictAssessment> predictedConflicts;
-    double elapsedSimSeconds = 0.0;
+    double simTime = 0.0;
 
-    bool isOutOfBounds(const Aircraft& plane) const;
-    Aircraft* findAircraftByCallsign(const std::string& callsign);
-    const Aircraft* findAircraftByCallsign(const std::string& callsign) const;
+    bool outOfBounds(const Aircraft& plane) const;
+    Aircraft* findByCallsign(const std::string& callsign);
+    const Aircraft* findByCallsign(const std::string& callsign) const;
     Aircraft* findAircraft(const Aircraft* plane);
     const Aircraft* findAircraft(const Aircraft* plane) const;
     bool canCaptureIls(const Aircraft& plane, const Airport& airport) const;
-    AircraftCommand buildIlsCommand(const Aircraft& plane, const Airport& airport) const;
-    void applyArrivalSpacingControls();
-    void updateArrivalSequencing();
-    void runConflictCycle();
-    void releaseResolvedAircraft();
-    void updateConflictResolutions();
-    bool hasReachedRunway(const Aircraft& plane, const Airport& airport) const;
-    void removeCollidedAircraft();
-    void removeLandedAircraft();
+    AircraftCommand makeIlsCommand(const Aircraft& plane, const Airport& airport) const;
+    void applySpacing();
+    void updateSequencing();
+    void updateConflicts();
+    void releaseResolved();
+    void updateResolutions();
+    bool reachedRunway(const Aircraft& plane, const Airport& airport) const;
+    void removeCollisions();
+    void removeLanded();
     void removeOutOfBoundsAircraft();
-    void updateAutonomousCommands();
+    void updateAutomation();
 
 public:
     Simulation();
-    void update(double deltaTime);
-    void applySettings(const SimSettings& newSettings);
+    void update(double dt);
+    void applySettings(const SimSettings& sim);
     SpawnRequestResult requestRandomSpawn();
     void clearLastSpawnResult();
     bool issueInstruction(const Aircraft* plane, const AircraftInstruction& instruction);

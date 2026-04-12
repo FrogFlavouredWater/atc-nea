@@ -53,47 +53,47 @@ public:
         double elapsedSimSeconds);
 
 private:
-    std::map<std::string, ConflictResolutionState> activeResolutionStates;
+    std::map<std::string, ConflictResolutionState> activeStates;
 
-    [[nodiscard]] std::vector<PredictedConflictAssessment> collectResolvableConflicts(
+    [[nodiscard]] std::vector<PredictedConflictAssessment> collectConflicts(
         const std::vector<std::unique_ptr<Aircraft>>& aircraft,
         const std::set<std::pair<std::string, std::string>>& activeConflictPairs,
         const std::vector<PredictedConflictAssessment>& predictedConflicts,
         const ConflictDetector& conflictDetector) const;
 
     // Build a short ordered list of plausible maneuvers for one aircraft.
-    [[nodiscard]] std::vector<AircraftInstruction> buildResolutionCandidates(
+    [[nodiscard]] std::vector<AircraftInstruction> buildCandidates(
         const Aircraft& plane,
         const Aircraft& other,
         const PredictedConflictAssessment& conflict,
         const std::vector<Airport>& airports) const;
 
-    [[nodiscard]] PredictedConflictAssessment assessConflictWithInstruction(
+    [[nodiscard]] PredictedConflictAssessment assessWithInstruction(
         const Aircraft& plane,
         const AircraftInstruction& instruction,
         const Aircraft& other,
         const ConflictDetector& conflictDetector) const;
 
-    [[nodiscard]] bool wasPairRecentlyAssigned(
+    [[nodiscard]] bool recentlyAssigned(
         const Aircraft& first,
         const Aircraft& second,
         const std::pair<std::string, std::string>& pair,
-        double elapsedSimSeconds) const;
+        double simTime) const;
 
     // Try each maneuverable aircraft in priority order and return the first
     // useful assignment found for this conflict pair.
-    [[nodiscard]] std::optional<ConflictResolutionAssignment> chooseResolutionAssignment(
+    [[nodiscard]] std::optional<ConflictResolutionAssignment> chooseAssignment(
         const Aircraft& first,
         const Aircraft& second,
         const PredictedConflictAssessment& conflict,
         const std::pair<std::string, std::string>& pair,
         const std::vector<Airport>& airports,
         const ConflictDetector& conflictDetector,
-        double elapsedSimSeconds);
+        double simTime);
 
     // Save enough state to later release the aircraft back to its prior task.
-    void storeResolutionState(const std::string& callsign,
-                              const std::pair<std::string, std::string>& pair,
-                              const AircraftInstruction& resumeInstruction,
-                              double elapsedSimSeconds);
+    void storeState(const std::string& callsign,
+                    const std::pair<std::string, std::string>& pair,
+                    const AircraftInstruction& resumeInstruction,
+                    double simTime);
 };

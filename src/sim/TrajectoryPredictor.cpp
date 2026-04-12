@@ -35,14 +35,14 @@ double severityScore(double horizontalDistanceNm,
 }
 
 std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft& aircraft,
-                                                                 double horizonSeconds,
-                                                                 double stepSeconds) const {
-    if (horizonSeconds < 0.0 || stepSeconds <= 0.0) {
+                                                                 double horizon,
+                                                                 double step) const {
+    if (horizon < 0.0 || step <= 0.0) {
         return {};
     }
 
     std::vector<PredictedAircraftState> prediction;
-    prediction.reserve(static_cast<size_t>(horizonSeconds / stepSeconds) + 2);
+    prediction.reserve(static_cast<size_t>(horizon / step) + 2);
 
     Aircraft simulatedAircraft = aircraft;
 
@@ -51,10 +51,10 @@ std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft&
     prediction.push_back({0.0, simulatedAircraft.getMotionState()});
 
     double elapsedSeconds = 0.0;
-    while (elapsedSeconds < horizonSeconds) {
-        const double delta = std::min(stepSeconds, horizonSeconds - elapsedSeconds);
-        simulatedAircraft.update(delta);
-        elapsedSeconds += delta;
+    while (elapsedSeconds < horizon) {
+        const double dt = std::min(step, horizon - elapsedSeconds);
+        simulatedAircraft.update(dt);
+        elapsedSeconds += dt;
         prediction.push_back({elapsedSeconds, simulatedAircraft.getMotionState()});
     }
 
@@ -63,14 +63,14 @@ std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft&
 
 PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& first,
                                                                 const Aircraft& second,
-                                                                double horizonSeconds,
-                                                                double stepSeconds) const {
-    if (horizonSeconds < 0.0 || stepSeconds <= 0.0) {
+                                                                double horizon,
+                                                                double step) const {
+    if (horizon < 0.0 || step <= 0.0) {
         return {};
     }
 
-    const auto firstPrediction = predict(first, horizonSeconds, stepSeconds);
-    const auto secondPrediction = predict(second, horizonSeconds, stepSeconds);
+    const auto firstPrediction = predict(first, horizon, step);
+    const auto secondPrediction = predict(second, horizon, step);
     if (firstPrediction.empty() || secondPrediction.empty()) {
         return {};
     }
@@ -102,7 +102,7 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
         const bool breachesSeparation = horizontal < SeparationRules::HORIZONTAL_NM
             && vertical < SeparationRules::VERTICAL_FT;
         const double sampleTime = firstPrediction[i].timeSeconds;
-        const double sampleSeverity = severityScore(horizontal, vertical, sampleTime, horizonSeconds);
+        const double sampleSeverity = severityScore(horizontal, vertical, sampleTime, horizon);
 
         if (!assessment.breachesTacticalThreshold && breachesTacticalThreshold) {
             // Record only the first tactical breach time; later samples are more
@@ -153,6 +153,6 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
     assessment.severityScore = severityScore(assessment.closestHorizontalDistanceNm,
                                              assessment.closestVerticalDistanceFt,
                                              assessment.timeToClosestApproachSeconds,
-                                             horizonSeconds);
+                                             horizon);
     return assessment;
 }

@@ -8,17 +8,13 @@
 #include <numbers>
 
 namespace {
-double interpolateLinear(double input,
-                         double inputStart,
-                         double inputEnd,
-                         double outputStart,
-                         double outputEnd) {
-    if (std::abs(inputEnd - inputStart) < 1e-6) {
-        return outputEnd;
+double lerp(double x, double x0, double x1, double y0, double y1) {
+    if (std::abs(x1 - x0) < 1e-6) {
+        return y1;
     }
 
-    const double t = std::clamp((input - inputStart) / (inputEnd - inputStart), 0.0, 1.0);
-    return outputStart + (outputEnd - outputStart) * t;
+    const double t = std::clamp((x - x0) / (x1 - x0), 0.0, 1.0);
+    return y0 + (y1 - y0) * t;
 }
 }
 
@@ -61,11 +57,11 @@ double Airport::minLocalizerRange() const {
         return 0.0;
     }
 
-    double minRangeNm = localizer.sectors.front().range;
+    double minRange = localizer.sectors.front().range;
     for (const auto& sector : localizer.sectors) {
-        minRangeNm = std::min(minRangeNm, sector.range);
+        minRange = std::min(minRange, sector.range);
     }
-    return minRangeNm;
+    return minRange;
 }
 
 std::pair<double, double> Airport::ilsCaptureAltitudeBandFt(double alongTrackNm) const {
@@ -84,23 +80,23 @@ double Airport::ilsProfileAltitudeFt(Vec2 aircraftPosition, double currentAltitu
     double desiredAltitudeFt = 0.0;
 
     if (alongTrackNm > innerRegionBoundaryNm) {
-        desiredAltitudeFt = interpolateLinear(alongTrackNm,
-                                              innerRegionBoundaryNm,
-                                              localizer.length,
-                                              SimTuning::ILS_OUTER_CAPTURE_MIN_ALTITUDE_FT,
-                                              SimTuning::ILS_OUTER_CAPTURE_MAX_ALTITUDE_FT);
+        desiredAltitudeFt = lerp(alongTrackNm,
+                                 innerRegionBoundaryNm,
+                                 localizer.length,
+                                 SimTuning::ILS_OUTER_CAPTURE_MIN_ALTITUDE_FT,
+                                 SimTuning::ILS_OUTER_CAPTURE_MAX_ALTITUDE_FT);
     } else if (alongTrackNm > SimTuning::ILS_FINAL_DESCENT_START_NM) {
-        desiredAltitudeFt = interpolateLinear(alongTrackNm,
-                                              SimTuning::ILS_FINAL_DESCENT_START_NM,
-                                              innerRegionBoundaryNm,
-                                              SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT,
-                                              SimTuning::ILS_INNER_CAPTURE_MAX_ALTITUDE_FT);
+        desiredAltitudeFt = lerp(alongTrackNm,
+                                 SimTuning::ILS_FINAL_DESCENT_START_NM,
+                                 innerRegionBoundaryNm,
+                                 SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT,
+                                 SimTuning::ILS_INNER_CAPTURE_MAX_ALTITUDE_FT);
     } else {
-        desiredAltitudeFt = interpolateLinear(alongTrackNm,
-                                              0.0,
-                                              SimTuning::ILS_FINAL_DESCENT_START_NM,
-                                              0.0,
-                                              SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT);
+        desiredAltitudeFt = lerp(alongTrackNm,
+                                 0.0,
+                                 SimTuning::ILS_FINAL_DESCENT_START_NM,
+                                 0.0,
+                                 SimTuning::ILS_INNER_CAPTURE_MIN_ALTITUDE_FT);
     }
 
     return std::min(desiredAltitudeFt, currentAltitudeFt);

@@ -22,7 +22,7 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kRadToDeg = 180.0 / kPi;
 constexpr double kDegToRad = kPi / 180.0;
 
-Vec2 pointFromPolar(Vec2 center, double radiusNm, double angleDeg) {
+Vec2 polarPoint(Vec2 center, double radiusNm, double angleDeg) {
     const double angleRad = angleDeg * kDegToRad;
     return Vec2{
         center.x + std::cos(angleRad) * radiusNm,
@@ -30,18 +30,18 @@ Vec2 pointFromPolar(Vec2 center, double radiusNm, double angleDeg) {
     };
 }
 
-Vec2 interpolatePosition(Vec2 a, Vec2 b, double ratio) {
+Vec2 lerpPos(Vec2 a, Vec2 b, double ratio) {
     return Vec2{
         a.x + (b.x - a.x) * ratio,
         a.y + (b.y - a.y) * ratio
     };
 }
 
-double interpolateHeading(double fromHeading, double toHeading, double ratio) {
-    return normalizeAngle(fromHeading + getShortestAngleDiff(toHeading, fromHeading) * ratio);
+double lerpHeading(double from, double to, double ratio) {
+    return normalizeAngle(from + getShortestAngleDiff(to, from) * ratio);
 }
 
-double computePredictionHorizonSeconds(const Aircraft& aircraft) {
+double predictionHorizon(const Aircraft& aircraft) {
     // Extend the preview long enough to show likely altitude capture, but keep
     // it bounded so guidance drawing stays responsive.
     const double altitudeDiffFt = std::abs(static_cast<double>(aircraft.getTargetAltitude()) - aircraft.getAltitudeExact());
@@ -56,8 +56,8 @@ double computePredictionHorizonSeconds(const Aircraft& aircraft) {
         return kGuidanceHorizonMinSeconds;
     }
 
-    const double secondsToCapture = altitudeDiffFt / verticalRateFpm * 60.0;
-    return std::clamp(secondsToCapture + kGuidanceMarginSeconds,
+    const double captureSecs = altitudeDiffFt / verticalRateFpm * 60.0;
+    return std::clamp(captureSecs + kGuidanceMarginSeconds,
                       kGuidanceHorizonMinSeconds,
                       kGuidanceHorizonMaxSeconds);
 }
@@ -113,9 +113,9 @@ TurnArcPreview buildTurnArc(const Aircraft& aircraft) {
     ) * kRadToDeg;
     preview.sweepAngleDeg = std::abs(headingDiff);
     preview.directionSign = directionSign;
-    preview.endPoint = pointFromPolar(preview.center,
-                                      preview.radiusNm,
-                                      preview.startAngleDeg + preview.sweepAngleDeg * static_cast<double>(preview.directionSign));
+    preview.endPoint = polarPoint(preview.center,
+                                  preview.radiusNm,
+                                  preview.startAngleDeg + preview.sweepAngleDeg * static_cast<double>(preview.directionSign));
     return preview;
 }
 
@@ -172,41 +172,41 @@ HoldPreview buildHoldPreview(const Aircraft& aircraft) {
 }
 
 AltitudeCapturePreview buildAltitudeCapture(const Aircraft& aircraft,
-                                            const std::vector<PredictedAircraftState>& prediction) {
+                                            const std::vector<PredictedAircraftState>& path) {
     AltitudeCapturePreview preview;
 
     const double targetAltitude = static_cast<double>(aircraft.getTargetAltitude());
     const double toleranceFt = aircraft.getPerformance().altitudeCaptureToleranceFt;
-    if (std::abs(targetAltitude - aircraft.getAltitudeExact()) <= toleranceFt || prediction.size() < 2) {
+    if (std::abs(targetAltitude - aircraft.getAltitudeExact()) <= toleranceFt || path.size() < 2) {
         return preview;
     }
 
-    for (size_t i = 1; i < prediction.size(); ++i) {
+    for (size_t i = 1; i < path.size(); ++i) {
         // Interpolate between predictor samples so the marker lands near the
         // actual capture point instead of snapping to a coarse time step.
-        const auto& previous = prediction[i - 1];
-        const auto& current = prediction[i];
-        const double previousAltitude = previous.motion.altitude;
-        const double currentAltitude = current.motion.altitude;
+        const auto& prev = path[i - 1];
+        const auto& cur = path[i];
+        const double prevAlt = prev.motion.altitude;
+        const double curAlt = cur.motion.altitude;
 
         const bool targetReached =
-            (targetAltitude >= previousAltitude && targetAltitude <= currentAltitude)
-            || (targetAltitude <= previousAltitude && targetAltitude >= currentAltitude)
-            || std::abs(targetAltitude - currentAltitude) <= toleranceFt;
+            (targetAltitude >= prevAlt && targetAltitude <= curAlt)
+            || (targetAltitude <= prevAlt && targetAltitude >= curAlt)
+            || std::abs(targetAltitude - curAlt) <= toleranceFt;
 
         if (!targetReached) {
             continue;
         }
 
         double ratio = 1.0;
-        const double altitudeDelta = currentAltitude - previousAltitude;
+        const double altitudeDelta = curAlt - prevAlt;
         if (std::abs(altitudeDelta) > 0.001) {
-            ratio = std::clamp((targetAltitude - previousAltitude) / altitudeDelta, 0.0, 1.0);
+            ratio = std::clamp((targetAltitude - prevAlt) / altitudeDelta, 0.0, 1.0);
         }
 
         preview.visible = true;
-        preview.position = interpolatePosition(previous.motion.position, current.motion.position, ratio);
-        preview.headingDeg = interpolateHeading(previous.motion.heading, current.motion.heading, ratio);
+        preview.position = lerpPos(prev.motion.position, cur.motion.position, ratio);
+        preview.headingDeg = lerpHeading(prev.motion.heading, cur.motion.heading, ratio);
         preview.radiusNm = std::clamp(
             distanceNm(aircraft.getPosition(), preview.position) * kAltitudeMarkerRadiusScale,
             kAltitudeMarkerMinRadiusNm,
@@ -227,7 +227,7 @@ AltitudeCapturePreview buildAltitudeCapture(const Aircraft& aircraft,
         preview.startAngleDeg = normalizeAngle(captureAngleDeg - kAltitudeMarkerSweepDeg / 2.0);
         preview.sweepAngleDeg = kAltitudeMarkerSweepDeg;
         preview.directionSign = 1;
-        preview.timeSeconds = previous.timeSeconds + (current.timeSeconds - previous.timeSeconds) * ratio;
+        preview.timeSeconds = prev.timeSeconds + (cur.timeSeconds - prev.timeSeconds) * ratio;
         return preview;
     }
 
@@ -245,11 +245,11 @@ GuidancePreview GuidancePreviewService::build(const Aircraft& aircraft) {
         return preview;
     }
 
-    const double horizonSeconds = computePredictionHorizonSeconds(aircraft);
-    const auto predictedTrajectory = predictor.predict(aircraft, horizonSeconds, kGuidanceStepSeconds);
+    const double horizon = predictionHorizon(aircraft);
+    const auto path = predictor.predict(aircraft, horizon, kGuidanceStepSeconds);
 
     preview.turnArc = buildTurnArc(aircraft);
     preview.headingVector = buildHeadingVector(aircraft, preview.turnArc);
-    preview.altitudeCapture = buildAltitudeCapture(aircraft, predictedTrajectory);
+    preview.altitudeCapture = buildAltitudeCapture(aircraft, path);
     return preview;
 }

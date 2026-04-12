@@ -172,10 +172,10 @@ std::vector<ConflictResolutionRelease> ConflictResolver::collectReleases(
 
     // Release only after the pair is no longer active and the minimum hold
     // window has elapsed, to avoid rapid flip-flopping.
-    for (auto it = activeResolutionStates.begin(); it != activeResolutionStates.end(); ) {
+    for (auto it = activeStates.begin(); it != activeStates.end(); ) {
         Aircraft* plane = findAircraftByCallsign(aircraft, it->first);
         if (!plane) {
-            it = activeResolutionStates.erase(it);
+            it = activeStates.erase(it);
             continue;
         }
 
@@ -192,7 +192,7 @@ std::vector<ConflictResolutionRelease> ConflictResolver::collectReleases(
             plane->getCallsign(),
             it->second.resumeInstruction
         });
-        it = activeResolutionStates.erase(it);
+        it = activeStates.erase(it);
     }
 
     return releases;
@@ -206,7 +206,7 @@ std::vector<ConflictResolutionAssignment> ConflictResolver::resolve(
     const ConflictDetector& conflictDetector,
     double elapsedSimSeconds) {
     std::vector<ConflictResolutionAssignment> assignments;
-    const auto conflicts = collectResolvableConflicts(aircraft, activeConflictPairs, predictedConflicts, conflictDetector);
+    const auto conflicts = collectConflicts(aircraft, activeConflictPairs, predictedConflicts, conflictDetector);
     if (conflicts.empty()) {
         return assignments;
     }
@@ -221,17 +221,17 @@ std::vector<ConflictResolutionAssignment> ConflictResolver::resolve(
         }
 
         const auto pair = ConflictDetector::makeConflictPair(conflict.firstCallsign, conflict.secondCallsign);
-        if (wasPairRecentlyAssigned(*first, *second, pair, elapsedSimSeconds)) {
+        if (recentlyAssigned(*first, *second, pair, elapsedSimSeconds)) {
             continue;
         }
 
-        if (auto assignment = chooseResolutionAssignment(*first,
-                                                         *second,
-                                                         conflict,
-                                                         pair,
-                                                         airports,
-                                                         conflictDetector,
-                                                         elapsedSimSeconds)) {
+        if (auto assignment = chooseAssignment(*first,
+                                               *second,
+                                               conflict,
+                                               pair,
+                                               airports,
+                                               conflictDetector,
+                                               elapsedSimSeconds)) {
             assignments.push_back(*assignment);
         }
     }
@@ -239,7 +239,7 @@ std::vector<ConflictResolutionAssignment> ConflictResolver::resolve(
     return assignments;
 }
 
-std::vector<PredictedConflictAssessment> ConflictResolver::collectResolvableConflicts(
+std::vector<PredictedConflictAssessment> ConflictResolver::collectConflicts(
     const std::vector<std::unique_ptr<Aircraft>>& aircraft,
     const std::set<std::pair<std::string, std::string>>& activeConflictPairs,
     const std::vector<PredictedConflictAssessment>& predictedConflicts,
@@ -277,7 +277,7 @@ std::vector<PredictedConflictAssessment> ConflictResolver::collectResolvableConf
     return conflicts;
 }
 
-std::vector<AircraftInstruction> ConflictResolver::buildResolutionCandidates(
+std::vector<AircraftInstruction> ConflictResolver::buildCandidates(
     const Aircraft& plane,
     const Aircraft& other,
     const PredictedConflictAssessment& conflict,
@@ -309,7 +309,7 @@ std::vector<AircraftInstruction> ConflictResolver::buildResolutionCandidates(
     return candidates;
 }
 
-PredictedConflictAssessment ConflictResolver::assessConflictWithInstruction(
+PredictedConflictAssessment ConflictResolver::assessWithInstruction(
     const Aircraft& plane,
     const AircraftInstruction& instruction,
     const Aircraft& other,
@@ -321,40 +321,40 @@ PredictedConflictAssessment ConflictResolver::assessConflictWithInstruction(
     return conflictDetector.assessConflict(trialAircraft, other);
 }
 
-bool ConflictResolver::wasPairRecentlyAssigned(
+bool ConflictResolver::recentlyAssigned(
     const Aircraft& first,
     const Aircraft& second,
     const ConflictPair& pair,
-    double elapsedSimSeconds) const {
+    double simTime) const {
     const auto wasRecentlyAssigned = [&](const Aircraft& plane) {
-        const auto stateIt = activeResolutionStates.find(plane.getCallsign());
-        return stateIt != activeResolutionStates.end()
+        const auto stateIt = activeStates.find(plane.getCallsign());
+        return stateIt != activeStates.end()
             && stateIt->second.conflictPair == pair
-            && elapsedSimSeconds - stateIt->second.assignedAtSeconds
+            && simTime - stateIt->second.assignedAtSeconds
                 < SimTuning::RESOLUTION_REEVALUATION_SECONDS;
     };
 
     return wasRecentlyAssigned(first) || wasRecentlyAssigned(second);
 }
 
-std::optional<ConflictResolutionAssignment> ConflictResolver::chooseResolutionAssignment(
+std::optional<ConflictResolutionAssignment> ConflictResolver::chooseAssignment(
     const Aircraft& first,
     const Aircraft& second,
     const PredictedConflictAssessment& conflict,
     const ConflictPair& pair,
     const std::vector<Airport>& airports,
     const ConflictDetector& conflictDetector,
-    double elapsedSimSeconds) {
+    double simTime) {
     for (const Aircraft* candidatePlane : buildManeuverOrder(first, second, airports)) {
         // Do not stack two unrelated resolution states onto the same aircraft.
-        const auto existingStateIt = activeResolutionStates.find(candidatePlane->getCallsign());
-        if (existingStateIt != activeResolutionStates.end()
-            && existingStateIt->second.conflictPair != pair) {
+        const auto stateIt = activeStates.find(candidatePlane->getCallsign());
+        if (stateIt != activeStates.end()
+            && stateIt->second.conflictPair != pair) {
             continue;
         }
 
         const Aircraft& otherPlane = candidatePlane == &first ? second : first;
-        const auto candidates = buildResolutionCandidates(*candidatePlane, otherPlane, conflict, airports);
+        const auto candidates = buildCandidates(*candidatePlane, otherPlane, conflict, airports);
         AircraftInstruction bestInstruction{};
         double bestSeverityScore = conflict.severityScore;
         bool foundImprovement = false;
@@ -364,7 +364,7 @@ std::optional<ConflictResolutionAssignment> ConflictResolver::chooseResolutionAs
         // If none do, keep the one that reduces severity the most.
         for (const auto& candidateInstruction : candidates) {
             const PredictedConflictAssessment assessment =
-                assessConflictWithInstruction(*candidatePlane, candidateInstruction, otherPlane, conflictDetector);
+                assessWithInstruction(*candidatePlane, candidateInstruction, otherPlane, conflictDetector);
             if (!assessment.valid) {
                 continue;
             }
@@ -390,10 +390,10 @@ std::optional<ConflictResolutionAssignment> ConflictResolver::chooseResolutionAs
         }
 
         const AircraftInstruction resumeInstruction =
-            existingStateIt != activeResolutionStates.end()
-                ? existingStateIt->second.resumeInstruction
+            stateIt != activeStates.end()
+                ? stateIt->second.resumeInstruction
                 : candidatePlane->getActiveInstruction();
-        storeResolutionState(candidatePlane->getCallsign(), pair, resumeInstruction, elapsedSimSeconds);
+        storeState(candidatePlane->getCallsign(), pair, resumeInstruction, simTime);
 
         return ConflictResolutionAssignment{
             candidatePlane->getCallsign(),
@@ -406,13 +406,13 @@ std::optional<ConflictResolutionAssignment> ConflictResolver::chooseResolutionAs
     return std::nullopt;
 }
 
-void ConflictResolver::storeResolutionState(const std::string& callsign,
-                                            const ConflictPair& pair,
-                                            const AircraftInstruction& resumeInstruction,
-                                            double elapsedSimSeconds) {
-    activeResolutionStates[callsign] = ConflictResolutionState{
+void ConflictResolver::storeState(const std::string& callsign,
+                                  const ConflictPair& pair,
+                                  const AircraftInstruction& resumeInstruction,
+                                  double simTime) {
+    activeStates[callsign] = ConflictResolutionState{
         pair,
         resumeInstruction,
-        elapsedSimSeconds
+        simTime
     };
 }

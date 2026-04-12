@@ -10,45 +10,15 @@
 namespace {
 constexpr double kSimulationSpeedStep = 1.0;
 
-std::string describeDisplaySettings(const DisplaySettings& displaySettings) {
-    std::ostringstream stream;
-    stream << displaySettings.screenWidth << "x" << displaySettings.screenHeight
-           << ", mode=" << toString(displaySettings.screenMode)
-           << ", target_fps=" << displaySettings.targetFps;
-    return stream.str();
-}
+void applyDisplay(const DisplaySettings& display) {
 
-std::string describeSimSettings(const SimSettings& simSettings) {
-    std::ostringstream stream;
-    stream << "speed=" << simSettings.simulationSpeed
-           << "x, max_aircraft=" << simSettings.maxAircraft
-           << ", aircraft_size=" << simSettings.aircraftSize
-           << ", pixels_per_nm=" << simSettings.pixelsPerNm;
-    return stream.str();
-}
-
-std::string formatSimulationSpeed(double simulationSpeed) {
-    std::ostringstream stream;
-    stream.setf(std::ios::fixed);
-    stream.precision(1);
-    stream << simulationSpeed << "x";
-    return stream.str();
-}
-
-void applyDisplaySettings(const DisplaySettings& displaySettings) {
-    // Normalize the native window state first so switching between windowed and
-    // borderless modes does not stack window flags unpredictably.
-    if (IsWindowFullscreen()) {
-        ToggleFullscreen();
-    }
-
-    switch (displaySettings.screenMode) {
+    switch (display.screenMode) {
     case ScreenMode::WINDOWED:
         ClearWindowState(FLAG_WINDOW_UNDECORATED);
-        SetWindowSize(displaySettings.screenWidth, displaySettings.screenHeight);
+        SetWindowSize(display.screenWidth, display.screenHeight);
         SetWindowPosition(
-            (GetMonitorWidth(0) - displaySettings.screenWidth) / 2,
-            (GetMonitorHeight(0) - displaySettings.screenHeight) / 2
+            (GetMonitorWidth(0) - display.screenWidth) / 2,
+            (GetMonitorHeight(0) - display.screenHeight) / 2
         );
         break;
 
@@ -62,20 +32,20 @@ void applyDisplaySettings(const DisplaySettings& displaySettings) {
         throw std::runtime_error("Unhandled ScreenMode enum");
     }
 
-    SetTargetFPS(displaySettings.targetFps);
+    SetTargetFPS(display.targetFps);
 }
 }
 
-Engine::Engine() : currentState(GameState::MENU), ui{}, sim{}, selectedAircraft(nullptr) {}
+Engine::Engine() = default;
 
 Engine& Engine::getInstance() {
     static Engine instance;
     return instance;
 }
 
-void Engine::constructWindow() {
+void Engine::createWindow() {
     Config::clampAppSettings(settings);
-    pendingSettings = settings;
+    pending = settings;
 
     Logger::info("Creating application window");
     SetConfigFlags(FLAG_MSAA_4X_HINT);
@@ -88,22 +58,25 @@ void Engine::constructWindow() {
 
 void Engine::applySettings() {
     Config::clampAppSettings(settings);
-    Logger::info("Applying display settings: " + describeDisplaySettings(settings.display));
-    Logger::info("Applying simulation settings: " + describeSimSettings(settings.sim));
-    applyDisplaySettings(settings.display);
+    {
+        std::ostringstream stream;
+        stream << "Applying display settings: "
+               << settings.display.screenWidth << "x" << settings.display.screenHeight
+               << ", mode=" << toString(settings.display.screenMode)
+               << ", target_fps=" << settings.display.targetFps;
+        Logger::info(stream.str());
+    }
+    {
+        std::ostringstream stream;
+        stream << "Applying simulation settings: "
+               << "speed=" << settings.sim.simulationSpeed
+               << "x, max_aircraft=" << settings.sim.maxAircraft
+               << ", aircraft_size=" << settings.sim.aircraftSize
+               << ", pixels_per_nm=" << settings.sim.pixelsPerNm;
+        Logger::info(stream.str());
+    }
+    applyDisplay(settings.display);
     sim.applySettings(settings.sim);
-}
-
-void Engine::handleGlobalInput() {
-    if (!IsKeyPressed(KEY_P)) {
-        return;
-    }
-
-    if (currentState == GameState::RUNNING) {
-        currentState = GameState::PAUSED;
-    } else if (currentState == GameState::PAUSED) {
-        currentState = GameState::RUNNING;
-    }
 }
 
 void Engine::handleSimulationInput() {
@@ -111,88 +84,110 @@ void Engine::handleSimulationInput() {
         settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed - kSimulationSpeedStep,
                                                   SimConfig::MIN_SIMULATION_SPEED,
                                                   SimConfig::MAX_SIMULATION_SPEED);
-        Logger::info("Simulation speed set to " + formatSimulationSpeed(settings.sim.simulationSpeed));
+        {
+            std::ostringstream stream;
+            stream.setf(std::ios::fixed);
+            stream.precision(1);
+            stream << "Simulation speed set to " << settings.sim.simulationSpeed << "x";
+            Logger::info(stream.str());
+        }
     }
     if (IsKeyPressed(KEY_PERIOD)) {
         settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed + kSimulationSpeedStep,
                                                   SimConfig::MIN_SIMULATION_SPEED,
                                                   SimConfig::MAX_SIMULATION_SPEED);
-        Logger::info("Simulation speed set to " + formatSimulationSpeed(settings.sim.simulationSpeed));
+        {
+            std::ostringstream stream;
+            stream.setf(std::ios::fixed);
+            stream.precision(1);
+            stream << "Simulation speed set to " << settings.sim.simulationSpeed << "x";
+            Logger::info(stream.str());
+        }
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         // Selection is done in sim-space, so convert the screen click back into
         // nautical miles before asking the simulation for a hit test.
-        Aircraft* previousSelection = selectedAircraft;
+        Aircraft* prevSelected = selected;
         Vector2 mousePos = GetMousePosition();
-        Vec2 nmMousePos = UI::PixelsToNM(mousePos, settings.sim);
-        double selectionRadiusNm = 30.0 / settings.sim.pixelsPerNm;
+        Vec2 mouseNm = UI::PixelsToNM(mousePos, settings.sim);
+        double pickRadiusNm = 30.0 / settings.sim.pixelsPerNm;
 
-        selectedAircraft = sim.getAircraftAt(nmMousePos, selectionRadiusNm);
+        selected = sim.getAircraftAt(mouseNm, pickRadiusNm);
 
-        if (selectedAircraft != previousSelection) {
-            if (selectedAircraft) {
-                Logger::info("Selected aircraft " + selectedAircraft->getCallsign());
-            } else if (previousSelection) {
+        if (selected != prevSelected) {
+            if (selected) {
+                Logger::info("Selected aircraft " + selected->getCallsign());
+            } else if (prevSelected) {
                 Logger::info("Cleared aircraft selection");
             }
         }
     }
 
-    if (selectedAircraft && IsKeyPressed(KEY_I)) {
-        sim.toggleApproachClearance(selectedAircraft);
+    if (selected && IsKeyPressed(KEY_I)) {
+        sim.toggleApproachClearance(selected);
     }
 
-    if (selectedAircraft
-        && selectedAircraft->getControlMode() != AircraftControlMode::ILS
+    if (selected
+        && selected->getControlMode() != AircraftControlMode::ILS
         && IsKeyPressed(KEY_H)) {
-        if (selectedAircraft->getInstructionType() == AircraftInstructionType::HOLD) {
-            sim.releaseHold(selectedAircraft);
+        if (selected->getInstructionType() == AircraftInstructionType::HOLD) {
+            sim.releaseHold(selected);
         } else {
-            sim.issueHoldAtCurrentPosition(selectedAircraft);
+            sim.issueHoldAtCurrentPosition(selected);
         }
     }
 
-    if (selectedAircraft && selectedAircraft->getControlMode() != AircraftControlMode::ILS) {
+    if (selected && selected->getControlMode() != AircraftControlMode::ILS) {
         // Manual vectoring edits the currently commanded targets, then sends the
         // whole instruction back to the simulation in one go.
-        const AircraftCommand currentCommand = selectedAircraft->getCommand();
+        const AircraftCommand cmd = selected->getCommand();
         AircraftInstruction instruction{
             AircraftInstructionType::VECTOR,
-            currentCommand.targetHeading,
-            currentCommand.targetSpeed,
-            currentCommand.targetAltitude,
+            cmd.targetHeading,
+            cmd.targetSpeed,
+            cmd.targetAltitude,
             AircraftControlMode::MANUAL
         };
-        bool instructionChanged = false;
+        bool changed = false;
 
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
             instruction.targetHeading -= 10.0;
-            instructionChanged = true;
+            changed = true;
         }
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
             instruction.targetHeading += 10.0;
-            instructionChanged = true;
+            changed = true;
         }
         if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
             instruction.targetSpeed += 10.0;
-            instructionChanged = true;
+            changed = true;
         }
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
             instruction.targetSpeed -= 10.0;
-            instructionChanged = true;
+            changed = true;
         }
         if (IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_PAGE_UP)) {
             instruction.targetAltitude += 1000;
-            instructionChanged = true;
+            changed = true;
         }
         if (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_PAGE_DOWN)) {
             instruction.targetAltitude -= 1000;
-            instructionChanged = true;
+            changed = true;
         }
 
-        if (instructionChanged) {
-            sim.issueInstruction(selectedAircraft, instruction);
+        if (changed) {
+            sim.issueInstruction(selected, instruction);
+        }
+    }
+}
+
+void Engine::handleGlobalInput() {
+    if (IsKeyPressed(KEY_P)) {
+        if (state == GameState::RUNNING) {
+            state = GameState::PAUSED;
+        } else if (state == GameState::PAUSED) {
+            state = GameState::RUNNING;
         }
     }
 }
@@ -200,18 +195,18 @@ void Engine::handleSimulationInput() {
 void Engine::handleMainMenuAction(MainMenuAction action) {
     switch (action) {
     case MainMenuAction::START:
-        currentState = GameState::RUNNING;
+        state = GameState::RUNNING;
         break;
 
     case MainMenuAction::OPEN_SETTINGS:
         Logger::info("Opening settings menu");
-        pendingSettings = settings;
-        showingSettings = true;
+        pending = settings;
+        showSettings = true;
         break;
 
     case MainMenuAction::EXIT:
         Logger::info("Exit requested from main menu");
-        currentState = GameState::EXIT;
+        state = GameState::EXIT;
         break;
 
     case MainMenuAction::NONE:
@@ -222,30 +217,30 @@ void Engine::handleMainMenuAction(MainMenuAction action) {
     }
 }
 
-void Engine::handleSettingsMenuResult(const SettingsMenuResult& result) {
+void Engine::handleSettingsMenu(const SettingsMenuResult& result) {
     if (result.applyRequested) {
-        settings = pendingSettings;
+        settings = pending;
         applySettings();
     }
 
     if (result.closeRequested) {
         Logger::info("Closing settings menu");
-        showingSettings = false;
-        pendingSettings = settings;
+        showSettings = false;
+        pending = settings;
     }
 }
 
-void Engine::handleSimulationViewResult(const SimulationViewResult& result) {
+void Engine::handleSimView(const SimulationViewResult& result) {
     if (result.spawnRequested) {
-        const SpawnRequestResult spawnResult = sim.requestRandomSpawn();
-        if (spawnResult.success) {
-            selectedAircraft = spawnResult.aircraft;
+        const SpawnRequestResult spawn = sim.requestRandomSpawn();
+        if (spawn.success) {
+            selected = spawn.aircraft;
         }
     }
 
     if (result.toggleDebugRequested) {
-        debugEnabled = !debugEnabled;
-        Logger::info(std::string("Debug overlay ") + (debugEnabled ? "enabled" : "disabled"));
+        showDebug = !showDebug;
+        Logger::info(std::string("Debug overlay ") + (showDebug ? "enabled" : "disabled"));
     }
 }
 
@@ -255,11 +250,11 @@ void Engine::handlePauseMenuAction(PauseMenuAction action) {
         break;
 
     case PauseMenuAction::RESUME:
-        currentState = GameState::RUNNING;
+        state = GameState::RUNNING;
         break;
 
     case PauseMenuAction::RETURN_TO_MENU:
-        currentState = GameState::MENU;
+        state = GameState::MENU;
         break;
 
     default:
@@ -267,22 +262,22 @@ void Engine::handlePauseMenuAction(PauseMenuAction action) {
     }
 }
 
-void Engine::updateRunning(double deltaTime) {
+void Engine::updateRunning(double dt) {
     handleSimulationInput();
-    sim.update(deltaTime * settings.sim.simulationSpeed);
-    validateSelection();
+    sim.update(dt * settings.sim.simulationSpeed);
+    clearInvalidSelection();
 }
 
-void Engine::validateSelection() {
-    if (selectedAircraft && !sim.containsAircraft(selectedAircraft)) {
+void Engine::clearInvalidSelection() {
+    if (selected && !sim.containsAircraft(selected)) {
         Logger::info("Selected aircraft left the simulation");
-        selectedAircraft = nullptr;
+        selected = nullptr;
     }
 }
 
 void Engine::renderMenu() {
-    if (showingSettings) {
-        handleSettingsMenuResult(ui.DrawSettingsMenu(pendingSettings));
+    if (showSettings) {
+        handleSettingsMenu(ui.DrawSettingsMenu(pending));
         return;
     }
 
@@ -290,11 +285,11 @@ void Engine::renderMenu() {
 }
 
 void Engine::renderRunning() {
-    handleSimulationViewResult(ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft));
+    handleSimView(ui.DrawSimulation(sim, settings, showDebug, selected));
 }
 
 void Engine::renderPaused() {
-    ui.DrawSimulation(sim, settings, debugEnabled, selectedAircraft);
+    ui.DrawSimulation(sim, settings, showDebug, selected);
     handlePauseMenuAction(ui.DrawPauseMenu());
 }
 
@@ -309,17 +304,17 @@ void Engine::spawnInitialTraffic() {
 
 void Engine::init() {
     Logger::info("Initializing engine");
-    constructWindow();
+    createWindow();
     sim.addAirport({"LHR", {0.0, 0.0}, 90.0, 2.0, {}});
     spawnInitialTraffic();
 }
 
-void Engine::update(double deltaTime) {
+void Engine::update(double dt) {
     handleGlobalInput();
 
-    switch (currentState) {
+    switch (state) {
     case GameState::RUNNING:
-        updateRunning(deltaTime);
+        updateRunning(dt);
         break;
 
     case GameState::MENU:
@@ -337,7 +332,7 @@ void Engine::render() {
     BeginDrawing();
     ClearBackground(GRAY);
 
-    switch (currentState) {
+    switch (state) {
     case GameState::MENU:
         renderMenu();
         break;
@@ -363,20 +358,18 @@ void Engine::render() {
 
 void Engine::run() {
     Logger::info("Entering main loop");
-    GameState previousState = currentState;
+    GameState prevState = state;
     while (!shouldClose()) {
-        // Update and render stay explicit here so the frame loop remains easy to
-        // follow during debugging.
-        double deltaTime = static_cast<double>(GetFrameTime());
-        update(deltaTime);
+        const double dt = GetFrameTime();
+        update(dt);
         render();
 
-        if (currentState != previousState) {
+        if (state != prevState) {
             Logger::info(std::string("Game state changed from ")
-                         + toString(previousState)
+                         + toString(prevState)
                          + " to "
-                         + toString(currentState));
-            previousState = currentState;
+                         + toString(state));
+            prevState = state;
         }
     }
     Logger::info("Closing application window");
@@ -384,5 +377,5 @@ void Engine::run() {
 }
 
 bool Engine::shouldClose() {
-    return WindowShouldClose() || currentState == GameState::EXIT;
+    return WindowShouldClose() || state == GameState::EXIT;
 }

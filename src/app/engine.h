@@ -8,29 +8,29 @@
 // input dispatch, and coordination between UI and Simulation.
 class Engine {
     private:
-        GameState currentState;
+        GameState state = GameState::MENU;
         UI ui;
         Simulation sim;
-        Aircraft* selectedAircraft{};
+        Aircraft* selected{};
         AppSettings settings = AppConfig::DEFAULTS;
         // Settings edits stay here until the user presses Apply.
-        AppSettings pendingSettings = AppConfig::DEFAULTS;
-        bool showingSettings = false;
+        AppSettings pending = AppConfig::DEFAULTS;
+        bool showSettings = false;
 
-        bool debugEnabled = true;
+        bool showDebug = true;
 
         Engine();
-        void constructWindow();
+        void createWindow();
         void applySettings();
 
         void handleGlobalInput();
         void handleSimulationInput();
         void handleMainMenuAction(MainMenuAction action);
-        void handleSettingsMenuResult(const SettingsMenuResult& result);
-        void handleSimulationViewResult(const SimulationViewResult& result);
+        void handleSettingsMenu(const SettingsMenuResult& result);
+        void handleSimView(const SimulationViewResult& result);
         void handlePauseMenuAction(PauseMenuAction action);
-        void updateRunning(double deltaTime);
-        void validateSelection();
+        void updateRunning(double dt);
+        void clearInvalidSelection();
         void renderMenu();
         void renderRunning();
         void renderPaused();
@@ -43,7 +43,7 @@ class Engine {
         void operator=(const Engine&) = delete;
 
         void init();
-        void update(double deltaTime);
+        void update(double dt);
         void render();
         void run();
 

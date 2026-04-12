@@ -40,12 +40,12 @@ public:
 
     SimulationViewResult DrawSimulation(const Simulation& sim,
                                         const AppSettings& settings,
-                                        bool debugEnabled,
-                                        const Aircraft* selectedAircraft);
+                                        bool showDebug,
+                                        const Aircraft* selected);
 
-    static Vector2 NMToPixels(Vec2 nmPos, const SimSettings& simSettings);
-    static double NMToPixels(double nmDistance, const SimSettings& simSettings);
+    static Vector2 NMToPixels(Vec2 nmPos, const SimSettings& sim);
+    static double NMToPixels(double nmDistance, const SimSettings& sim);
     // Radar clicks are converted back into sim-space before Engine asks the
     // Simulation to hit-test or issue commands.
-    static Vec2 PixelsToNM(Vector2 pixelPos, const SimSettings& simSettings);
+    static Vec2 PixelsToNM(Vector2 pixelPos, const SimSettings& sim);
 };

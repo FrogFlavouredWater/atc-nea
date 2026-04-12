@@ -26,12 +26,12 @@ public:
     [[nodiscard]] std::vector<SchedulerAction> buildSequencingActions(
         const std::vector<std::unique_ptr<Aircraft>>& aircraft,
         const std::vector<Airport>& airports,
-        double elapsedSimSeconds) const;
+        double simTime) const;
 
     [[nodiscard]] std::vector<SchedulerAction> buildSpacingActions(
         const std::vector<std::unique_ptr<Aircraft>>& aircraft,
         const std::vector<Airport>& airports) const;
 
 private:
-    [[nodiscard]] double estimateArrivalTimeSeconds(const Aircraft& plane, const Airport& airport) const;
+    [[nodiscard]] double estimateArrivalTime(const Aircraft& plane, const Airport& airport) const;
 };

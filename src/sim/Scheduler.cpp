@@ -9,7 +9,7 @@
 std::vector<SchedulerAction> Scheduler::buildSequencingActions(
     const std::vector<std::unique_ptr<Aircraft>>& aircraft,
     const std::vector<Airport>& airports,
-    double elapsedSimSeconds) const {
+    double simTime) const {
     std::vector<SchedulerAction> actions;
     if (airports.empty()) {
         return actions;
@@ -40,7 +40,7 @@ std::vector<SchedulerAction> Scheduler::buildSequencingActions(
         const Airport& airport = airports.front();
         candidates.push_back(ScheduledArrivalCandidate{
             plane.get(),
-            elapsedSimSeconds + estimateArrivalTimeSeconds(*plane, airport),
+            simTime + estimateArrivalTime(*plane, airport),
             distanceNm(plane->getPosition(), airport.position)
         });
     }
@@ -53,23 +53,20 @@ std::vector<SchedulerAction> Scheduler::buildSequencingActions(
                   return first.plane->getCallsign() < second.plane->getCallsign();
               });
 
-    double nextAvailableSlotTimeSeconds = elapsedSimSeconds;
+    double nextSlotTime = simTime;
     for (const auto& candidate : candidates) {
-        const double slotTimeSeconds = std::max(candidate.earliestArrivalTimeSeconds,
-                                                nextAvailableSlotTimeSeconds);
-        nextAvailableSlotTimeSeconds = slotTimeSeconds + SimTuning::ARRIVAL_SCHEDULE_SPACING_SECONDS;
+        const double slotTime = std::max(candidate.earliestArrivalTimeSeconds, nextSlotTime);
+        nextSlotTime = slotTime + SimTuning::ARRIVAL_SCHEDULE_SPACING_SECONDS;
 
-        const double earlyBySeconds = slotTimeSeconds - candidate.earliestArrivalTimeSeconds;
+        const double earlyBy = slotTime - candidate.earliestArrivalTimeSeconds;
         if (candidate.plane->getControlMode() == AircraftControlMode::ILS) {
             continue;
         }
 
         if (candidate.plane->getInstructionType() == AircraftInstructionType::HOLD) {
-            const double postReleaseArrivalTimeSeconds =
-                estimateArrivalTimeSeconds(*candidate.plane, airports.front());
-            const double releaseWindowTimeSeconds =
-                elapsedSimSeconds + postReleaseArrivalTimeSeconds + SimTuning::ARRIVAL_RELEASE_LEAD_SECONDS;
-            if (releaseWindowTimeSeconds >= slotTimeSeconds) {
+            const double releaseArrival = estimateArrivalTime(*candidate.plane, airports.front());
+            const double releaseTime = simTime + releaseArrival + SimTuning::ARRIVAL_RELEASE_LEAD_SECONDS;
+            if (releaseTime >= slotTime) {
                 actions.push_back(SchedulerAction{
                     SchedulerActionType::RELEASE_HOLD,
                     candidate.plane->getCallsign()
@@ -78,7 +75,7 @@ std::vector<SchedulerAction> Scheduler::buildSequencingActions(
             continue;
         }
 
-        if (earlyBySeconds < SimTuning::ARRIVAL_HOLD_THRESHOLD_SECONDS) {
+        if (earlyBy < SimTuning::ARRIVAL_HOLD_THRESHOLD_SECONDS) {
             continue;
         }
         if (candidate.distanceToAirportNm > SimTuning::ARRIVAL_HOLD_MAX_RANGE_NM) {
@@ -208,7 +205,7 @@ std::vector<SchedulerAction> Scheduler::buildSpacingActions(
     return actions;
 }
 
-double Scheduler::estimateArrivalTimeSeconds(const Aircraft& plane, const Airport& airport) const {
+double Scheduler::estimateArrivalTime(const Aircraft& plane, const Airport& airport) const {
     // Arrival time is a rough max of lateral travel time and descent time.
     const double distanceToAirportNm = distanceNm(plane.getPosition(), airport.position);
     const double speedKts = std::max(plane.getSpeed(), 120.0);

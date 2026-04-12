@@ -83,24 +83,21 @@ bool Aircraft::breachesSeparationWith(const Aircraft& other) const {
         && altitudeDifferenceTo(other) < SeparationRules::VERTICAL_FT;
 }
 
-bool Aircraft::overlapsSpriteWith(const Aircraft& other, double squareSideNm) const {
+bool Aircraft::collidesWith(const Aircraft& other, double collisionBoxSizeNm) const {
     const double dx = std::abs(motion.position.x - other.motion.position.x);
     const double dy = std::abs(motion.position.y - other.motion.position.y);
-    return dx <= squareSideNm && dy <= squareSideNm;
-}
-
-bool Aircraft::collidesWith(const Aircraft& other, double squareSideNm) const {
-    return overlapsSpriteWith(other, squareSideNm)
+    return dx <= collisionBoxSizeNm
+        && dy <= collisionBoxSizeNm
         && altitudeDifferenceTo(other) < CollisionRules::VERTICAL_FT;
 }
 
-void Aircraft::update(double deltaTime) {
-    trailElapsedSeconds += deltaTime;
+void Aircraft::update(double dt) {
+    trailElapsedSeconds += dt;
     if (activeInstruction.type == AircraftInstructionType::HOLD) {
         // HOLD is the only instruction that owns its own internal state machine.
         updateHoldCommand();
     }
-    stepAircraftMotion(motion, command, performance, deltaTime);
+    stepAircraftMotion(motion, command, performance, dt);
 
     if (trailPoints.empty() || distanceNm(trailPoints.back().position, motion.position) >= kTrailSampleDistanceNm) {
         recordTrailPoint();
@@ -217,11 +214,11 @@ void Aircraft::updateHoldCommand() {
     } else if (holdPhase == HoldPhase::INBOUND) {
         command.targetHeading = inboundHeading;
     } else if (holdPhase == HoldPhase::TURN_INBOUND) {
-        const double radialBearingDeg = bearingDeg(firstTurnCenter, motion.position);
-        command.targetHeading = normalizeAngle(radialBearingDeg + turnDirection * 90.0);
+        const double radial = bearingDeg(firstTurnCenter, motion.position);
+        command.targetHeading = normalizeAngle(radial + turnDirection * 90.0);
     } else {
-        const double radialBearingDeg = bearingDeg(secondTurnCenter, motion.position);
-        command.targetHeading = normalizeAngle(radialBearingDeg + turnDirection * 90.0);
+        const double radial = bearingDeg(secondTurnCenter, motion.position);
+        command.targetHeading = normalizeAngle(radial + turnDirection * 90.0);
     }
 
     if (holdPhase == HoldPhase::INBOUND && lateralNm < lateralTargetNm - turnRadiusNm) {

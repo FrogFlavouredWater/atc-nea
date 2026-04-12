@@ -38,10 +38,10 @@ public:
     // Both helpers sample forward motion; assessConflict simply compares two
     // predicted paths after running the same predictor.
     [[nodiscard]] std::vector<PredictedAircraftState> predict(const Aircraft& aircraft,
-                                                              double horizonSeconds,
-                                                              double stepSeconds) const;
+                                                              double horizon,
+                                                              double step) const;
     [[nodiscard]] PredictedConflictAssessment assessConflict(const Aircraft& first,
                                                              const Aircraft& second,
-                                                             double horizonSeconds,
-                                                             double stepSeconds) const;
+                                                             double horizon,
+                                                             double step) const;
 };
