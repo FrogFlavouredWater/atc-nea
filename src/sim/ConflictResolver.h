@@ -18,6 +18,7 @@ struct ConflictResolutionState {
     std::pair<std::string, std::string> conflictPair{};
     AircraftInstruction resumeInstruction{};
     double assignedAtSeconds = 0.0;
+    double assignedAtUiSeconds = 0.0;
 };
 
 struct ConflictResolutionRelease {
@@ -42,7 +43,8 @@ public:
         const std::vector<std::unique_ptr<Aircraft>>& aircraft,
         const std::set<std::pair<std::string, std::string>>& activeConflictPairs,
         const std::set<std::pair<std::string, std::string>>& activePredictedConflictPairs,
-        double elapsedSimSeconds);
+        double elapsedSimSeconds,
+        double elapsedUiSeconds);
 
     [[nodiscard]] std::vector<ConflictResolutionAssignment> resolve(
         const std::vector<std::unique_ptr<Aircraft>>& aircraft,
@@ -50,7 +52,8 @@ public:
         const std::set<std::pair<std::string, std::string>>& activeConflictPairs,
         const std::vector<PredictedConflictAssessment>& predictedConflicts,
         const ConflictDetector& conflictDetector,
-        double elapsedSimSeconds);
+        double elapsedSimSeconds,
+        double elapsedUiSeconds);
 
 private:
     std::map<std::string, ConflictResolutionState> activeStates;
@@ -65,7 +68,6 @@ private:
     [[nodiscard]] std::vector<AircraftInstruction> buildCandidates(
         const Aircraft& plane,
         const Aircraft& other,
-        const PredictedConflictAssessment& conflict,
         const std::vector<Airport>& airports) const;
 
     [[nodiscard]] PredictedConflictAssessment assessWithInstruction(
@@ -78,7 +80,8 @@ private:
         const Aircraft& first,
         const Aircraft& second,
         const std::pair<std::string, std::string>& pair,
-        double simTime) const;
+        double simTime,
+        double uiTime) const;
 
     // Try each maneuverable aircraft in priority order and return the first
     // useful assignment found for this conflict pair.
@@ -89,11 +92,13 @@ private:
         const std::pair<std::string, std::string>& pair,
         const std::vector<Airport>& airports,
         const ConflictDetector& conflictDetector,
-        double simTime);
+        double simTime,
+        double uiTime);
 
     // Save enough state to later release the aircraft back to its prior task.
     void storeState(const std::string& callsign,
                     const std::pair<std::string, std::string>& pair,
                     const AircraftInstruction& resumeInstruction,
-                    double simTime);
+                    double simTime,
+                    double uiTime);
 };

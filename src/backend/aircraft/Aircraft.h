@@ -36,6 +36,7 @@ private:
     FlightPhase phase;
     bool conflictAlert;
     bool approachCleared = false;
+    bool destroyed = false;
     int assignedIlsAirportIndex = -1;
     HoldPhase holdPhase = HoldPhase::OUTBOUND;
 
@@ -66,6 +67,7 @@ public:
     [[nodiscard]] AircraftInstructionType getInstructionType() const { return activeInstruction.type; }
     [[nodiscard]] bool hasConflictAlert() const { return conflictAlert; }
     [[nodiscard]] bool hasApproachClearance() const { return approachCleared; }
+    [[nodiscard]] bool isDestroyed() const { return destroyed; }
     [[nodiscard]] int getAssignedIlsAirportIndex() const { return assignedIlsAirportIndex; }
     [[nodiscard]] double getVerticalSpeedFpm() const { return motion.verticalSpeedFpm; }
     [[nodiscard]] double getTurnRateDegPerSec() const { return motion.turnRateDegPerSec; }
@@ -78,6 +80,7 @@ public:
     void setPhase(FlightPhase newPhase) { phase = newPhase; }
     void setConflictAlert(bool inConflict) { conflictAlert = inConflict; }
     void setApproachClearance(bool cleared) { approachCleared = cleared; }
+    void markDestroyed();
     void setAssignedIlsAirportIndex(int airportIndex) { assignedIlsAirportIndex = airportIndex; }
     void clearAssignedIlsAirportIndex() { assignedIlsAirportIndex = -1; }
 

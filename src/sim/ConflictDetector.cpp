@@ -10,7 +10,14 @@ ConflictDetectionReport ConflictDetector::detect(const std::vector<std::unique_p
     ConflictDetectionReport report;
 
     for (size_t i = 0; i < aircraft.size(); ++i) {
+        if (aircraft[i]->isDestroyed()) {
+            continue;
+        }
         for (size_t j = i + 1; j < aircraft.size(); ++j) {
+            if (aircraft[j]->isDestroyed()) {
+                continue;
+            }
+
             const bool hasCurrentConflict = aircraft[i]->breachesSeparationWith(*aircraft[j]);
             if (hasCurrentConflict) {
                 report.aircraftWithConflictAlert.insert(aircraft[i]->getCallsign());

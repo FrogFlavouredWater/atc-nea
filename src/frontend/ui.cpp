@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <set>
+#include <string>
 
 namespace {
 constexpr double kDegToRad = std::numbers::pi_v<double> / 180.0;
@@ -88,6 +90,8 @@ inline constexpr Color kGuidanceYellow{245, 220, 66, 255};
 inline constexpr Color kApproachGreen{102, 255, 140, 255};
 inline constexpr Color kIlsBlue{82, 174, 255, 255};
 inline constexpr Color kTrackTrail{42, 210, 95, 255};
+inline constexpr Color kConflictPurple{186, 93, 255, 255};
+inline constexpr Color kLossOfSeparationRed{255, 64, 64, 255};
 
 inline constexpr float kIlsCenterlineAlpha = 0.52f;
 inline constexpr float kIlsMajorTickAlpha = 0.48f;
@@ -324,7 +328,10 @@ void drawShadowedText(const char* text,
     DrawText(text, x, y, fontSize, textColor);
 }
 
-Color aircraftColor(const Aircraft& aircraft, bool selected) {
+Color aircraftColor(const Aircraft& aircraft,
+                    bool selected,
+                    bool predictedConflictHighlighted,
+                    bool currentConflictHighlighted) {
     Color color = WHITE;
     if (aircraft.getControlMode() == AircraftControlMode::ILS) {
         color = kIlsBlue;
@@ -334,8 +341,11 @@ Color aircraftColor(const Aircraft& aircraft, bool selected) {
         color = YELLOW;
     }
 
-    if (aircraft.hasConflictAlert()) {
-        color = RED;
+    if (predictedConflictHighlighted) {
+        color = kConflictPurple;
+    }
+    if (aircraft.hasConflictAlert() || aircraft.isDestroyed() || currentConflictHighlighted) {
+        color = kLossOfSeparationRed;
     }
 
     return color;
@@ -856,8 +866,94 @@ void drawAircraftTrail(const Aircraft& aircraft, const SimSettings& sim, bool se
     }
 }
 
-void drawAircraft(const Aircraft& aircraft, const SimSettings& sim, bool selected) {
-    const Color color = ui_detail::aircraftColor(aircraft, selected);
+void drawDashedLine(Vector2 start, Vector2 end, float dashLength, float gapLength, float thickness, Color color) {
+    const float dx = end.x - start.x;
+    const float dy = end.y - start.y;
+    const float length = std::sqrt(dx * dx + dy * dy);
+    if (length <= 0.0f) {
+        return;
+    }
+
+    const float stepLength = dashLength + gapLength;
+    const Vector2 direction{dx / length, dy / length};
+
+    for (float distance = 0.0f; distance < length; distance += stepLength) {
+        const float dashEnd = std::min(distance + dashLength, length);
+        const Vector2 segmentStart{
+            start.x + direction.x * distance,
+            start.y + direction.y * distance
+        };
+        const Vector2 segmentEnd{
+            start.x + direction.x * dashEnd,
+            start.y + direction.y * dashEnd
+        };
+        DrawLineEx(segmentStart, segmentEnd, thickness, color);
+    }
+}
+
+const Aircraft* findAircraftByCallsign(const Simulation& sim, const std::string& callsign) {
+    for (const auto& plane : sim.getAircraft()) {
+        if (plane->getCallsign() == callsign) {
+            return plane.get();
+        }
+    }
+    return nullptr;
+}
+
+std::set<std::pair<std::string, std::string>> buildCurrentConflictPairs(const Simulation& sim) {
+    std::set<std::pair<std::string, std::string>> pairs = sim.getActiveConflictPairs();
+    pairs.insert(sim.getActiveCollisionPairs().begin(), sim.getActiveCollisionPairs().end());
+    return pairs;
+}
+
+std::set<std::pair<std::string, std::string>> buildPredictedConflictPairs(const Simulation& sim,
+                                                                          const std::set<std::pair<std::string, std::string>>& currentPairs) {
+    std::set<std::pair<std::string, std::string>> pairs = sim.getVisualPredictedConflictPairs();
+    pairs.insert(sim.getActivePredictedConflictPairs().begin(), sim.getActivePredictedConflictPairs().end());
+    for (const auto& pair : currentPairs) {
+        pairs.erase(pair);
+    }
+    return pairs;
+}
+
+std::set<std::string> buildVisualConflictCallsigns(const std::set<std::pair<std::string, std::string>>& pairs) {
+    std::set<std::string> callsigns;
+    for (const auto& pair : pairs) {
+        callsigns.insert(pair.first);
+        callsigns.insert(pair.second);
+    }
+    return callsigns;
+}
+
+void drawConflictLinks(const Simulation& sim,
+                       const std::set<std::pair<std::string, std::string>>& conflictPairs,
+                       const SimSettings& settings,
+                       Color color) {
+    for (const auto& pair : conflictPairs) {
+        const Aircraft* first = findAircraftByCallsign(sim, pair.first);
+        const Aircraft* second = findAircraftByCallsign(sim, pair.second);
+        if (!first || !second) {
+            continue;
+        }
+
+        drawDashedLine(UI::NMToPixels(first->getPosition(), settings),
+                       UI::NMToPixels(second->getPosition(), settings),
+                       12.0f,
+                       7.0f,
+                       2.0f,
+                       color);
+    }
+}
+
+void drawAircraft(const Aircraft& aircraft,
+                  const SimSettings& sim,
+                  bool selected,
+                  bool predictedConflictHighlighted,
+                  bool currentConflictHighlighted) {
+    const Color color = ui_detail::aircraftColor(aircraft,
+                                                 selected,
+                                                 predictedConflictHighlighted,
+                                                 currentConflictHighlighted);
 
     drawAircraftTrail(aircraft, sim, selected);
 
@@ -983,8 +1079,19 @@ SimulationViewResult UI::DrawSimulation(const Simulation& sim,
         drawGuidancePreview(sim.getGuidancePreview(selected), settings.sim, showDebug);
     }
 
+    const auto currentConflictPairs = buildCurrentConflictPairs(sim);
+    const auto predictedConflictPairs = buildPredictedConflictPairs(sim, currentConflictPairs);
+    const auto currentConflictCallsigns = buildVisualConflictCallsigns(currentConflictPairs);
+    const auto predictedConflictCallsigns = buildVisualConflictCallsigns(predictedConflictPairs);
+    drawConflictLinks(sim, predictedConflictPairs, settings.sim, ui_detail::kConflictPurple);
+    drawConflictLinks(sim, currentConflictPairs, settings.sim, ui_detail::kLossOfSeparationRed);
+
     for (const auto& plane : sim.getAircraft()) {
-        drawAircraft(*plane, settings.sim, plane.get() == selected);
+        drawAircraft(*plane,
+                     settings.sim,
+                     plane.get() == selected,
+                     predictedConflictCallsigns.contains(plane->getCallsign()),
+                     currentConflictCallsigns.contains(plane->getCallsign()));
     }
 
     const SimulationViewResult result = drawSimulationHud(static_cast<int>(sim.getAircraft().size()),

@@ -264,7 +264,7 @@ void Engine::handlePauseMenuAction(PauseMenuAction action) {
 
 void Engine::updateRunning(double dt) {
     handleSimulationInput();
-    sim.update(dt * settings.sim.simulationSpeed);
+    sim.update(dt * settings.sim.simulationSpeed, dt);
     clearInvalidSelection();
 }
 

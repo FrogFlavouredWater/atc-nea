@@ -11,6 +11,7 @@
 #include "sim/TrajectoryPredictor.h"
 
 #include <memory>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -32,8 +33,13 @@ private:
     SpawnRequestResult lastSpawnResult{};
     std::set<std::pair<std::string, std::string>> activeConflictPairs;
     std::set<std::pair<std::string, std::string>> activePredictedConflictPairs;
+    std::set<std::pair<std::string, std::string>> visualPredictedConflictPairs;
+    std::set<std::pair<std::string, std::string>> activeCollisionPairs;
+    std::map<std::pair<std::string, std::string>, double> visualPredictedConflictExpiries;
+    std::map<std::string, double> destroyedAircraftRemovalTimes;
     std::vector<PredictedConflictAssessment> predictedConflicts;
     double simTime = 0.0;
+    double uiTime = 0.0;
 
     bool outOfBounds(const Aircraft& plane) const;
     Aircraft* findByCallsign(const std::string& callsign);
@@ -44,18 +50,20 @@ private:
     AircraftCommand makeIlsCommand(const Aircraft& plane, const Airport& airport) const;
     void applySpacing();
     void updateSequencing();
-    void updateConflicts();
+    void updateConflicts(double elapsedUiSeconds);
     void releaseResolved();
-    void updateResolutions();
+    void updateResolutions(double elapsedUiSeconds);
     bool reachedRunway(const Aircraft& plane, const Airport& airport) const;
+    void updateVisualPredictedConflicts(const std::set<std::pair<std::string, std::string>>& predictedPairs);
     void removeCollisions();
+    void removeDestroyedAircraft();
     void removeLanded();
     void removeOutOfBoundsAircraft();
     void updateAutomation();
 
 public:
     Simulation();
-    void update(double dt);
+    void update(double dt, double realDt);
     void applySettings(const SimSettings& sim);
     SpawnRequestResult requestRandomSpawn();
     void clearLastSpawnResult();
@@ -76,6 +84,10 @@ public:
     size_t getLandedCount() const { return landedCount; }
     size_t getHullLossCount() const { return hullLossCount; }
     size_t getPredictedConflictCount() const { return predictedConflicts.size(); }
+    const std::set<std::pair<std::string, std::string>>& getActiveConflictPairs() const { return activeConflictPairs; }
+    const std::set<std::pair<std::string, std::string>>& getActivePredictedConflictPairs() const { return activePredictedConflictPairs; }
+    const std::set<std::pair<std::string, std::string>>& getVisualPredictedConflictPairs() const { return visualPredictedConflictPairs; }
+    const std::set<std::pair<std::string, std::string>>& getActiveCollisionPairs() const { return activeCollisionPairs; }
     const SpawnRequestResult& getLastSpawnResult() const { return lastSpawnResult; }
     bool canSpawnMore() const;
     bool containsAircraft(const Aircraft* plane) const;

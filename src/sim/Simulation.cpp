@@ -31,8 +31,9 @@ std::string formatAircraftInstruction(const AircraftInstruction& instruction) {
 
 Simulation::Simulation() = default;
 
-void Simulation::update(double dt) {
+void Simulation::update(double dt, double realDt) {
     simTime += dt;
+    uiTime += realDt;
     updateAutomation();
 
     for (auto& plane : aircraft) {
@@ -40,9 +41,10 @@ void Simulation::update(double dt) {
     }
 
     removeCollisions();
+    removeDestroyedAircraft();
     removeLanded();
     removeOutOfBoundsAircraft();
-    updateConflicts();
+    updateConflicts(uiTime);
 }
 
 void Simulation::applySettings(const SimSettings& sim) {
@@ -80,6 +82,9 @@ bool Simulation::issueInstruction(const Aircraft* plane, const AircraftInstructi
         Logger::warn("Ignored instruction for aircraft that is no longer in the simulation");
         return false;
     }
+    if (target->isDestroyed()) {
+        return false;
+    }
 
     target->applyInstruction(instruction);
     if (instruction.controlMode == AircraftControlMode::MANUAL) {
@@ -113,6 +118,9 @@ bool Simulation::issueHoldAtCurrentPosition(const Aircraft* plane) {
         Logger::warn("Ignored hold request for aircraft that is no longer in the simulation");
         return false;
     }
+    if (target->isDestroyed()) {
+        return false;
+    }
 
     const AircraftInstruction holdInstruction{
         AircraftInstructionType::HOLD,
@@ -136,6 +144,9 @@ bool Simulation::releaseHold(const Aircraft* plane) {
     Aircraft* target = findAircraft(plane);
     if (!target) {
         Logger::warn("Ignored hold release for aircraft that is no longer in the simulation");
+        return false;
+    }
+    if (target->isDestroyed()) {
         return false;
     }
     if (airports.empty()) {
@@ -168,6 +179,9 @@ bool Simulation::toggleApproachClearance(const Aircraft* plane) {
     Aircraft* target = findAircraft(plane);
     if (!target) {
         Logger::warn("Ignored approach clearance toggle for aircraft that is no longer in the simulation");
+        return false;
+    }
+    if (target->isDestroyed()) {
         return false;
     }
 
@@ -207,6 +221,10 @@ void Simulation::detectConflicts() {
     // The detector only reports results; Simulation applies alert flags and
     // manages lifecycle logging around changes in conflict state.
     for (auto& plane : aircraft) {
+        if (plane->isDestroyed()) {
+            plane->setConflictAlert(true);
+            continue;
+        }
         plane->setConflictAlert(report.aircraftWithConflictAlert.contains(plane->getCallsign()));
     }
 
@@ -247,6 +265,7 @@ void Simulation::detectConflicts() {
 
     activeConflictPairs = std::move(currentConflictPairs);
     activePredictedConflictPairs = std::move(currentPredictedConflictPairs);
+    updateVisualPredictedConflicts(activePredictedConflictPairs);
 }
 
 GuidancePreview Simulation::getGuidancePreview(const Aircraft* plane) const {
@@ -267,6 +286,10 @@ bool Simulation::containsAircraft(const Aircraft* plane) const {
 
 Aircraft* Simulation::getAircraftAt(Vec2 pos, double radius) {
     for (auto& plane : aircraft) {
+        if (plane->isDestroyed()) {
+            continue;
+        }
+
         const Vec2 planePosition = plane->getPosition();
         const double dx = planePosition.x - pos.x;
         const double dy = planePosition.y - pos.y;
@@ -397,18 +420,19 @@ void Simulation::updateSequencing() {
     }
 }
 
-void Simulation::updateConflicts() {
+void Simulation::updateConflicts(double elapsedUiSeconds) {
     // Keep the conflict pass explicit so the update order is easy to follow.
     detectConflicts();
     releaseResolved();
-    updateResolutions();
+    updateResolutions(elapsedUiSeconds);
 }
 
 void Simulation::releaseResolved() {
     const auto releases = conflictResolver.collectReleases(aircraft,
                                                            activeConflictPairs,
                                                            activePredictedConflictPairs,
-                                                           simTime);
+                                                           simTime,
+                                                           uiTime);
     for (const auto& release : releases) {
         Aircraft* plane = findByCallsign(release.callsign);
         if (!plane) {
@@ -420,13 +444,14 @@ void Simulation::releaseResolved() {
     }
 }
 
-void Simulation::updateResolutions() {
+void Simulation::updateResolutions(double elapsedUiSeconds) {
     const auto assignments = conflictResolver.resolve(aircraft,
                                                       airports,
                                                       activeConflictPairs,
                                                       predictedConflicts,
                                                       conflictDetector,
-                                                      simTime);
+                                                      simTime,
+                                                      elapsedUiSeconds);
     for (const auto& assignment : assignments) {
         Aircraft* plane = findByCallsign(assignment.callsign);
         if (!plane) {
@@ -463,21 +488,49 @@ bool Simulation::reachedRunway(const Aircraft& plane, const Airport& airport) co
         <= SimTuning::ILS_CAPTURE_HEADING_TOLERANCE_DEG;
 }
 
+void Simulation::updateVisualPredictedConflicts(const std::set<std::pair<std::string, std::string>>& predictedPairs) {
+    for (const auto& pair : predictedPairs) {
+        visualPredictedConflictExpiries[pair] = uiTime + SimTuning::CONFLICT_VISUAL_LATCH_SECONDS;
+    }
+
+    visualPredictedConflictPairs.clear();
+    for (auto it = visualPredictedConflictExpiries.begin(); it != visualPredictedConflictExpiries.end(); ) {
+        if (it->second < uiTime) {
+            it = visualPredictedConflictExpiries.erase(it);
+            continue;
+        }
+
+        if (findByCallsign(it->first.first) && findByCallsign(it->first.second)) {
+            visualPredictedConflictPairs.insert(it->first);
+        }
+        ++it;
+    }
+}
+
 void Simulation::removeCollisions() {
     if (aircraft.size() < 2) {
         return;
     }
 
     const double collisionBoxSizeNm = computeCollisionBoxSizeNm(settings);
-    std::set<size_t> collidedIndices;
+    std::set<std::string> collidedCallsigns;
     for (size_t i = 0; i < aircraft.size(); ++i) {
+        if (aircraft[i]->isDestroyed()) {
+            continue;
+        }
+
         for (size_t j = i + 1; j < aircraft.size(); ++j) {
+            if (aircraft[j]->isDestroyed()) {
+                continue;
+            }
+
             if (!aircraft[i]->collidesWith(*aircraft[j], collisionBoxSizeNm)) {
                 continue;
             }
 
-            collidedIndices.insert(i);
-            collidedIndices.insert(j);
+            collidedCallsigns.insert(aircraft[i]->getCallsign());
+            collidedCallsigns.insert(aircraft[j]->getCallsign());
+            activeCollisionPairs.insert(ConflictDetector::makeConflictPair(*aircraft[i], *aircraft[j]));
             Logger::warn("Collision detected between "
                          + aircraft[i]->getCallsign()
                          + " and "
@@ -486,26 +539,56 @@ void Simulation::removeCollisions() {
         }
     }
 
-    if (collidedIndices.empty()) {
+    if (collidedCallsigns.empty()) {
         return;
     }
 
-    hullLossCount += collidedIndices.size();
-    size_t index = 0;
+    for (auto& plane : aircraft) {
+        if (!collidedCallsigns.contains(plane->getCallsign()) || plane->isDestroyed()) {
+            continue;
+        }
+
+        plane->markDestroyed();
+        destroyedAircraftRemovalTimes[plane->getCallsign()] = uiTime + SimTuning::CRASH_DISPLAY_SECONDS;
+        ++hullLossCount;
+    }
+}
+
+void Simulation::removeDestroyedAircraft() {
     aircraft.erase(
         std::remove_if(aircraft.begin(), aircraft.end(),
-            [&collidedIndices, &index](const std::unique_ptr<Aircraft>&) mutable {
-                const bool shouldRemove = collidedIndices.contains(index);
-                ++index;
-                return shouldRemove;
+            [this](const std::unique_ptr<Aircraft>& plane) {
+                if (!plane->isDestroyed()) {
+                    return false;
+                }
+
+                const auto removalIt = destroyedAircraftRemovalTimes.find(plane->getCallsign());
+                if (removalIt == destroyedAircraftRemovalTimes.end() || removalIt->second > uiTime) {
+                    return false;
+                }
+
+                destroyedAircraftRemovalTimes.erase(removalIt);
+                return true;
             }),
         aircraft.end());
+
+    for (auto it = activeCollisionPairs.begin(); it != activeCollisionPairs.end(); ) {
+        if (!findByCallsign(it->first) || !findByCallsign(it->second)) {
+            it = activeCollisionPairs.erase(it);
+            continue;
+        }
+        ++it;
+    }
 }
 
 void Simulation::removeLanded() {
     aircraft.erase(
         std::remove_if(aircraft.begin(), aircraft.end(),
             [this](const std::unique_ptr<Aircraft>& plane) {
+                if (plane->isDestroyed()) {
+                    return false;
+                }
+
                 const int airportIndex = plane->getAssignedIlsAirportIndex();
                 if (!isValidAirportIndex(airportIndex, airports.size())) {
                     return false;
@@ -527,6 +610,10 @@ void Simulation::removeOutOfBoundsAircraft() {
     aircraft.erase(
         std::remove_if(aircraft.begin(), aircraft.end(),
             [this](const std::unique_ptr<Aircraft>& plane) {
+                if (plane->isDestroyed()) {
+                    return false;
+                }
+
                 if (!outOfBounds(*plane)) {
                     return false;
                 }
@@ -545,6 +632,10 @@ void Simulation::updateAutomation() {
     // ILS capture and tracking run after sequencing/spacing so approach logic
     // can override autonomous arrival behaviour once capture is possible.
     for (auto& plane : aircraft) {
+        if (plane->isDestroyed()) {
+            continue;
+        }
+
         if (plane->getInstructionType() == AircraftInstructionType::CONFLICT_RESOLUTION
             || plane->getInstructionType() == AircraftInstructionType::HOLD) {
             continue;

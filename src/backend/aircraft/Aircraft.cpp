@@ -93,6 +93,10 @@ bool Aircraft::collidesWith(const Aircraft& other, double collisionBoxSizeNm) co
 
 void Aircraft::update(double dt) {
     trailElapsedSeconds += dt;
+    if (destroyed) {
+        return;
+    }
+
     if (activeInstruction.type == AircraftInstructionType::HOLD) {
         // HOLD is the only instruction that owns its own internal state machine.
         updateHoldCommand();
@@ -282,6 +286,15 @@ void Aircraft::applyInstruction(const AircraftInstruction& newInstruction) {
 
     syncCommandToInstruction();
     updatePhaseFromInstruction();
+}
+
+void Aircraft::markDestroyed() {
+    destroyed = true;
+    conflictAlert = true;
+    motion.speed = 0.0;
+    motion.velocity = {};
+    motion.verticalSpeedFpm = 0.0;
+    motion.turnRateDegPerSec = 0.0;
 }
 
 void Aircraft::applyCommand(const AircraftCommand& newCommand) {
