@@ -32,6 +32,7 @@ std::string formatAircraftInstruction(const AircraftInstruction& instruction) {
 Simulation::Simulation() = default;
 
 void Simulation::update(double dt, double realDt) {
+    // Advance clocks first. every subsystem sees the same sim/UI elapsed time this tick.
     simTime += dt;
     uiTime += realDt;
     updateAutomation();
@@ -58,6 +59,7 @@ SpawnRequestResult Simulation::requestRandomSpawn() {
                                                       trajectoryPredictor);
 
     if (lastSpawnResult.success) {
+        // Simulation owns insertion. spawn service can stay pure and just return a plan.
         const SpawnPlan& spawn = lastSpawnResult.spawn;
         aircraft.push_back(std::make_unique<Aircraft>(spawn.position,
                                                       spawn.headingDeg,
@@ -97,6 +99,7 @@ bool Simulation::issueInstruction(const Aircraft* plane, const AircraftInstructi
 }
 
 bool Simulation::issueCommand(const Aircraft* plane, const AircraftCommand& command) {
+    // Wrap commands back into instructions. Aircraft keeps one public apply path.
     return issueInstruction(plane, AircraftInstruction{
         command.source == AircraftControlMode::ILS
             ? AircraftInstructionType::ILS_INTERCEPT
@@ -192,6 +195,7 @@ bool Simulation::toggleApproachClearance(const Aircraft* plane) {
                  + target->getCallsign());
 
     if (!cleared) {
+        // Revoke approach clearance, drop runway assignment. no new state needed if already stable.
         target->clearAssignedIlsAirportIndex();
 
         if (target->getControlMode() == AircraftControlMode::ILS) {
@@ -347,6 +351,7 @@ const Aircraft* Simulation::findAircraft(const Aircraft* plane) const {
 }
 
 bool Simulation::canCaptureIls(const Aircraft& plane, const Airport& airport) const {
+    // Conservative ILS capture. clearance, geometry, heading, speed, altitude all need to line up.
     if (!plane.hasApproachClearance()) {
         return false;
     }
@@ -374,6 +379,7 @@ bool Simulation::canCaptureIls(const Aircraft& plane, const Airport& airport) co
 }
 
 AircraftCommand Simulation::makeIlsCommand(const Aircraft& plane, const Airport& airport) const {
+    // Pull heading toward localizer. trim speed as the aircraft closes on runway.
     const double crossTrackNm = airport.crossTrackError(plane.getPosition());
     const double headingCorrectionDeg = std::clamp(crossTrackNm * SimTuning::ILS_HEADING_CORRECTION_PER_NM,
                                                    -SimTuning::ILS_HEADING_CORRECTION_MAX_DEG,
@@ -489,6 +495,7 @@ bool Simulation::reachedRunway(const Aircraft& plane, const Airport& airport) co
 }
 
 void Simulation::updateVisualPredictedConflicts(const std::set<std::pair<std::string, std::string>>& predictedPairs) {
+    // Latch predicted pairs for a short window. avoids overlay flicker near threshold.
     for (const auto& pair : predictedPairs) {
         visualPredictedConflictExpiries[pair] = uiTime + SimTuning::CONFLICT_VISUAL_LATCH_SECONDS;
     }
@@ -543,6 +550,7 @@ void Simulation::removeCollisions() {
         return;
     }
 
+    // Mark collisions after the pair scan. one crash won't hide a second overlap this frame.
     for (auto& plane : aircraft) {
         if (!collidedCallsigns.contains(plane->getCallsign()) || plane->isDestroyed()) {
             continue;
@@ -572,6 +580,7 @@ void Simulation::removeDestroyedAircraft() {
             }),
         aircraft.end());
 
+    // Trim stale collision pairs after aircraft removal.
     for (auto it = activeCollisionPairs.begin(); it != activeCollisionPairs.end(); ) {
         if (!findByCallsign(it->first) || !findByCallsign(it->second)) {
             it = activeCollisionPairs.erase(it);
@@ -599,6 +608,7 @@ void Simulation::removeLanded() {
                     return false;
                 }
 
+                // Landing is a clean removal path. drop live traffic once touchdown criteria are met.
                 ++landedCount;
                 Logger::success("Aircraft " + plane->getCallsign() + " landed on " + airport.name);
                 return true;
@@ -618,6 +628,7 @@ void Simulation::removeOutOfBoundsAircraft() {
                     return false;
                 }
 
+                // Out-of-bounds counts as sector exit, not failure.
                 ++outOfBoundsCount;
                 Logger::warn("Aircraft " + plane->getCallsign() + " left simulation bounds and was removed");
                 return true;
@@ -636,6 +647,7 @@ void Simulation::updateAutomation() {
             continue;
         }
 
+        // Leave holds and conflict maneuvers alone. owning system releases them.
         if (plane->getInstructionType() == AircraftInstructionType::CONFLICT_RESOLUTION
             || plane->getInstructionType() == AircraftInstructionType::HOLD) {
             continue;
@@ -661,6 +673,7 @@ void Simulation::updateAutomation() {
             continue;
         }
 
+        // First legally capturable runway wins this update.
         for (size_t airportIndex = 0; airportIndex < airports.size(); ++airportIndex) {
             if (!canCaptureIls(*plane, airports[airportIndex])) {
                 continue;

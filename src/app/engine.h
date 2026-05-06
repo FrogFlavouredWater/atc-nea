@@ -11,18 +11,21 @@ class Engine {
         GameState state = GameState::MENU;
         UI ui;
         Simulation sim;
+        // Borrowed pointer into sim-owned aircraft. clearInvalidSelection() drops stale targets.
         Aircraft* selected{};
         AppSettings settings = AppConfig::DEFAULTS;
         // Settings edits stay here until the user presses Apply.
         AppSettings pending = AppConfig::DEFAULTS;
         bool showSettings = false;
 
+        // Debug rendering flag only. UI concern, Engine just carries it.
         bool showDebug = true;
 
         Engine();
         void createWindow();
         void applySettings();
 
+        // Small handlers around the loop. keeps run() on lifecycle work.
         void handleGlobalInput();
         void handleSimulationInput();
         void handleMainMenuAction(MainMenuAction action);

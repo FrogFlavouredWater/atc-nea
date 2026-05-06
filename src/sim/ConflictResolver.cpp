@@ -289,6 +289,7 @@ std::vector<AircraftInstruction> ConflictResolver::buildCandidates(
     std::vector<AircraftInstruction> candidates;
     candidates.reserve(9);
 
+    // Bias first turn away from the intruder. then add speed/altitude fallbacks around current command.
     const double dx = other.getPosition().x - plane.getPosition().x;
     const double dy = other.getPosition().y - plane.getPosition().y;
     const double intruderBearingDeg = normalizeAngle(std::atan2(dy, dx) * 180.0 / std::numbers::pi_v<double> + 90.0);
@@ -320,6 +321,7 @@ bool ConflictResolver::recentlyAssigned(
     const ConflictPair& pair,
     double simTime,
     double uiTime) const {
+    // Check both clocks. avoids instant pair recycling in fast or paused sim states.
     const auto wasRecentlyAssigned = [&](const Aircraft& plane) {
         const auto stateIt = activeStates.find(plane.getCallsign());
         return stateIt != activeStates.end()
@@ -386,6 +388,7 @@ std::optional<ConflictResolutionAssignment> ConflictResolver::chooseAssignment(
             continue;
         }
 
+        // Keep the pre-resolution instruction. release can put the aircraft back on plan.
         const AircraftInstruction resumeInstruction =
             stateIt != activeStates.end()
                 ? stateIt->second.resumeInstruction

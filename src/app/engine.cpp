@@ -11,7 +11,7 @@ namespace {
 constexpr double kSimulationSpeedStep = 1.0;
 
 void applyDisplay(const DisplaySettings& display) {
-
+    // Window mode first. target FPS applies after either branch.
     switch (display.screenMode) {
     case ScreenMode::WINDOWED:
         ClearWindowState(FLAG_WINDOW_UNDECORATED);
@@ -58,6 +58,7 @@ void Engine::createWindow() {
 
 void Engine::applySettings() {
     Config::clampAppSettings(settings);
+    // Log both settings groups before applying. easier config tracing from console.
     {
         std::ostringstream stream;
         stream << "Applying display settings: "
@@ -80,6 +81,7 @@ void Engine::applySettings() {
 }
 
 void Engine::handleSimulationInput() {
+    // Speed hotkeys tweak live sim settings directly. next update picks them up.
     if (IsKeyPressed(KEY_COMMA)) {
         settings.sim.simulationSpeed = std::clamp(settings.sim.simulationSpeed - kSimulationSpeedStep,
                                                   SimConfig::MIN_SIMULATION_SPEED,
@@ -183,6 +185,7 @@ void Engine::handleSimulationInput() {
 }
 
 void Engine::handleGlobalInput() {
+    // Top-level pause toggle. should work regardless of current sim selection.
     if (IsKeyPressed(KEY_P)) {
         if (state == GameState::RUNNING) {
             state = GameState::PAUSED;
@@ -285,6 +288,7 @@ void Engine::renderMenu() {
 }
 
 void Engine::renderRunning() {
+    // UI returns intent only. Engine decides what spawn/debug requests do.
     handleSimView(ui.DrawSimulation(sim, settings, showDebug, selected));
 }
 
@@ -365,6 +369,7 @@ void Engine::run() {
         render();
 
         if (state != prevState) {
+            // Log state changes after update/render. keeps the message in sync.
             Logger::info(std::string("Game state changed from ")
                          + toString(prevState)
                          + " to "

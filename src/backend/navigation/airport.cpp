@@ -19,6 +19,7 @@ double lerp(double x, double x0, double x1, double y0, double y1) {
 }
 
 bool Localizer::isWithinSignal(Vec2 airportPos, double runwayHeading, Vec2 targetPos) const {
+    // Check localizer geometry in polar form. range from runway plus angle off centreline.
     const double dx = targetPos.x - airportPos.x;
     const double dy = targetPos.y - airportPos.y;
     const double distance = std::sqrt(dx * dx + dy * dy);
@@ -36,6 +37,7 @@ bool Localizer::isWithinSignal(Vec2 airportPos, double runwayHeading, Vec2 targe
 }
 
 double Airport::alongTrackToRunway(Vec2 pos) const {
+    // Project aircraft-to-runway onto runway heading. positive means still ahead on final.
     const Vec2 runwayDirection = directionVectorForHeading(runwayHeading);
     const Vec2 toRunway{
         position.x - pos.x,
@@ -45,6 +47,7 @@ double Airport::alongTrackToRunway(Vec2 pos) const {
 }
 
 double Airport::crossTrackError(Vec2 pos) const {
+    // Cross-track uses runway right normal. keeps left/right error signed.
     const Vec2 relativeToRunway{
         pos.x - position.x,
         pos.y - position.y

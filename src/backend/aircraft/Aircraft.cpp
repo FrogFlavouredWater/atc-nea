@@ -49,6 +49,7 @@ Aircraft::Aircraft(Vec2 startPos,
                         callsign(id),
                         phase(FlightPhase::ARRIVAL),
                         conflictAlert(false) {
+    // Seed raw motion fields first. initializer derives heading, velocity, turn values.
     motion.position = startPos;
     motion.heading = initialHeading;
     motion.speed = initialSpeed;
@@ -109,6 +110,7 @@ void Aircraft::update(double dt) {
 }
 
 void Aircraft::recordTrailPoint() {
+    // Append trail samples here. trimming stays separate from callers.
     trailPoints.push_back(AircraftTrailPoint{motion.position, trailElapsedSeconds});
     trimTrailPoints();
 }
@@ -213,6 +215,7 @@ void Aircraft::updateHoldCommand() {
             break;
     }
 
+    // Phase picked. then choose straight-leg heading or turn tangent.
     if (holdPhase == HoldPhase::OUTBOUND) {
         command.targetHeading = outboundHeading;
     } else if (holdPhase == HoldPhase::INBOUND) {
@@ -289,6 +292,7 @@ void Aircraft::applyInstruction(const AircraftInstruction& newInstruction) {
 }
 
 void Aircraft::markDestroyed() {
+    // Freeze motion in place. keeps the wreck visible without drift.
     destroyed = true;
     conflictAlert = true;
     motion.speed = 0.0;

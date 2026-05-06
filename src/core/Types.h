@@ -68,6 +68,7 @@ enum class FlightPhase {
     EXITED
 };
 
+// Low-level targets the motion model follows each frame.
 struct AircraftCommand {
     double targetHeading = 0.0;
     double targetSpeed = 0.0;
@@ -75,6 +76,7 @@ struct AircraftCommand {
     AircraftControlMode source = AircraftControlMode::AUTONOMOUS;
 };
 
+// One level above commands. keeps extra intent like hold geometry or conflict vectors.
 struct AircraftInstruction {
     AircraftInstructionType type = AircraftInstructionType::MAINTAIN;
     double targetHeading = 0.0;

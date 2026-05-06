@@ -64,6 +64,7 @@ std::vector<SchedulerAction> Scheduler::buildSequencingActions(
         }
 
         if (candidate.plane->getInstructionType() == AircraftInstructionType::HOLD) {
+            // Release held aircraft only when next likely arrival fits the slot with lead buffer.
             const double releaseArrival = estimateArrivalTime(*candidate.plane, airports.front());
             const double releaseTime = simTime + releaseArrival + SimTuning::ARRIVAL_RELEASE_LEAD_SECONDS;
             if (releaseTime >= slotTime) {
@@ -181,6 +182,7 @@ std::vector<SchedulerAction> Scheduler::buildSpacingActions(
             continue;
         }
 
+        // Slow the follower toward leader speed. keep result inside arrival speed band.
         const double targetSpeed = std::clamp(std::min(leader.plane->getTargetSpeed(),
                                                        leader.plane->getSpeed()) - SimTuning::RESOLUTION_SPEED_STEP_KTS,
                                               SimTuning::ARRIVAL_SPEED_MIN_KTS,

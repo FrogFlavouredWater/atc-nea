@@ -57,6 +57,7 @@ struct GuidancePreview {
 
 class Aircraft;
 
+// Builder service for "what happens next" hints. keeps kinematics out of UI.
 class GuidancePreviewService {
 public:
     static GuidancePreview build(const Aircraft& aircraft);

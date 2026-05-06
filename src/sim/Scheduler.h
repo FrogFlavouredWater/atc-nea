@@ -18,6 +18,7 @@ enum class SchedulerActionType {
 struct SchedulerAction {
     SchedulerActionType type = SchedulerActionType::ISSUE_INSTRUCTION;
     std::string callsign{};
+    // Only used for ISSUE_INSTRUCTION.
     AircraftInstruction instruction{};
 };
 
@@ -33,5 +34,6 @@ public:
         const std::vector<Airport>& airports) const;
 
 private:
+    // Rough ETA for hold/release slotting. not a full trajectory solve.
     [[nodiscard]] double estimateArrivalTime(const Aircraft& plane, const Airport& airport) const;
 };

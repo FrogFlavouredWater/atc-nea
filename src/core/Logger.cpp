@@ -4,6 +4,7 @@
 
 namespace {
 void write(const char* tag, const char* color, const char* pad, const std::string& msg) {
+    // Fixed tag padding. logs still line up with ANSI colour stripped.
     std::cout << color << tag << "\033[0m" << pad << msg << std::endl;
 }
 }

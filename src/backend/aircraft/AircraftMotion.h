@@ -16,7 +16,9 @@ struct AircraftMotionState {
     double turnRadiusNm = 0.0;
 };
 
+// Startup normalization. fills derived velocity, turn rate, turn radius.
 void initializeAircraftMotion(AircraftMotionState& motion, const AircraftPerformance& performance);
+// Step one frame toward current command targets.
 void stepAircraftMotion(AircraftMotionState& motion,
                         const AircraftCommand& command,
                         const AircraftPerformance& performance,

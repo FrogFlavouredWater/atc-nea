@@ -13,6 +13,7 @@ struct PredictedAircraftState {
     AircraftMotionState motion{};
 };
 
+// Shared conflict shape for detection, UI alerts, resolver. carries current and worst-case predicted spacing.
 struct PredictedConflictAssessment {
     bool valid = false;
     bool breachesTacticalThreshold = false;

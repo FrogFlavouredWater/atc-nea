@@ -15,6 +15,7 @@ enum class MainMenuAction {
 };
 
 struct SettingsMenuResult {
+    // Apply and close stay separate. Engine can tell save from dismiss.
     bool applyRequested = false;
     bool closeRequested = false;
 };
@@ -26,6 +27,7 @@ enum class PauseMenuAction {
 };
 
 struct SimulationViewResult {
+    // UI reports intent only. Engine decides if requests can run.
     bool spawnRequested = false;
     bool toggleDebugRequested = false;
 };
@@ -34,6 +36,7 @@ class UI {
 public:
     UI() = default;
 
+    // Each draw call renders one screen, returns a compact action result.
     MainMenuAction DrawMainMenu();
     SettingsMenuResult DrawSettingsMenu(AppSettings& settings);
     PauseMenuAction DrawPauseMenu();

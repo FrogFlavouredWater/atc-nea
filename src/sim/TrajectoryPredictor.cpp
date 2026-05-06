@@ -37,6 +37,7 @@ double severityScore(double horizontalDistanceNm,
 std::vector<PredictedAircraftState> TrajectoryPredictor::predict(const Aircraft& aircraft,
                                                                  double horizon,
                                                                  double step) const {
+    // Reject invalid sampling parameters. no invented fallback timing.
     if (horizon < 0.0 || step <= 0.0) {
         return {};
     }
@@ -65,6 +66,7 @@ PredictedConflictAssessment TrajectoryPredictor::assessConflict(const Aircraft& 
                                                                 const Aircraft& second,
                                                                 double horizon,
                                                                 double step) const {
+    // Same guard here too. assessConflict can be called directly.
     if (horizon < 0.0 || step <= 0.0) {
         return {};
     }

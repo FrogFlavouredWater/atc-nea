@@ -40,6 +40,7 @@ inline Vec2 directionVectorForHeading(double headingDeg) {
     };
 }
 
+// "Right" means 90 degrees clockwise from heading. basis for cross-track and turn-centre math.
 inline Vec2 rightNormalForHeading(double headingDeg) {
     constexpr double kDegToRad = std::numbers::pi_v<double> / 180.0;
     return Vec2{

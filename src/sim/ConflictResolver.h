@@ -56,6 +56,7 @@ public:
         double elapsedUiSeconds);
 
 private:
+    // One active resolution state per maneuvered aircraft.
     std::map<std::string, ConflictResolutionState> activeStates;
 
     [[nodiscard]] std::vector<PredictedConflictAssessment> collectConflicts(

@@ -744,6 +744,7 @@ void drawRangeRings(Vec2 airportPos, const SimSettings& sim) {
     constexpr float kRings[] = {5.0f, 10.0f, 20.0f, 30.0f, 40.0f};
     const Vector2 center = UI::NMToPixels(airportPos, sim);
 
+    // Fixed range rings. easier radar scale reads than labels alone.
     for (const float radiusNm : kRings) {
         const float pixelRadius = static_cast<float>(UI::NMToPixels(radiusNm, sim));
         DrawCircleLinesV(center, pixelRadius, Fade(DARKGRAY, 0.9f));
@@ -910,6 +911,8 @@ std::set<std::pair<std::string, std::string>> buildPredictedConflictPairs(const 
                                                                           const std::set<std::pair<std::string, std::string>>& currentPairs) {
     std::set<std::pair<std::string, std::string>> pairs = sim.getVisualPredictedConflictPairs();
     pairs.insert(sim.getActivePredictedConflictPairs().begin(), sim.getActivePredictedConflictPairs().end());
+
+    // Current conflicts already have their own styling. skip double-drawing as predicted links.
     for (const auto& pair : currentPairs) {
         pairs.erase(pair);
     }
@@ -1083,6 +1086,8 @@ SimulationViewResult UI::DrawSimulation(const Simulation& sim,
     const auto predictedConflictPairs = buildPredictedConflictPairs(sim, currentConflictPairs);
     const auto currentConflictCallsigns = buildVisualConflictCallsigns(currentConflictPairs);
     const auto predictedConflictCallsigns = buildVisualConflictCallsigns(predictedConflictPairs);
+
+    // Build highlight/link sets once. aircraft draw only needs fast callsign lookups.
     drawConflictLinks(sim, predictedConflictPairs, settings.sim, ui_detail::kConflictPurple);
     drawConflictLinks(sim, currentConflictPairs, settings.sim, ui_detail::kLossOfSeparationRed);
 

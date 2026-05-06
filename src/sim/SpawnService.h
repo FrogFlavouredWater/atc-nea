@@ -56,10 +56,12 @@ public:
 private:
     std::mt19937 rng;
 
+    // Safety check against live traffic and short-term predicted motion.
     [[nodiscard]] bool isSafe(const SpawnPlan& plan,
                               const SimSettings& sim,
                               const std::vector<std::unique_ptr<Aircraft>>& aircraft,
                               const TrajectoryPredictor& predictor) const;
+    // Build fixed edge-entry candidates for each spawn request.
     [[nodiscard]] std::array<SpawnPlan, 8> buildPlans(const SimSettings& sim,
                                                       const std::vector<Airport>& airports);
 };

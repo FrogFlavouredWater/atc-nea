@@ -9,6 +9,7 @@
 ConflictDetectionReport ConflictDetector::detect(const std::vector<std::unique_ptr<Aircraft>>& aircraft) const {
     ConflictDetectionReport report;
 
+    // Walk each live pair once. classify as current conflict, predicted conflict, or neither.
     for (size_t i = 0; i < aircraft.size(); ++i) {
         if (aircraft[i]->isDestroyed()) {
             continue;
@@ -29,6 +30,7 @@ ConflictDetectionReport ConflictDetector::detect(const std::vector<std::unique_p
                                                                                     *aircraft[j],
                                                                                     SimTuning::CONFLICT_LOOKAHEAD_SECONDS,
                                                                                     SimTuning::CONFLICT_PREDICTION_STEP_SECONDS);
+            // Keep predicted alerts tactical. only surface pairs near threshold and already in intervention range.
             if (!hasCurrentConflict
                 && assessment.valid
                 && assessment.breachesTacticalThreshold
@@ -61,6 +63,7 @@ bool ConflictDetector::predictionBreachesSeparation(const std::vector<PredictedA
                                                     const std::vector<PredictedAircraftState>& secondPrediction) const {
     const size_t sampleCount = std::min(firstPrediction.size(), secondPrediction.size());
     for (size_t i = 0; i < sampleCount; ++i) {
+        // Compare equal-time samples directly. index i is the same future moment for both paths.
         const double horizontalDistanceNm = distanceNm(firstPrediction[i].motion.position,
                                                        secondPrediction[i].motion.position);
         const double verticalDistanceFt = std::abs(firstPrediction[i].motion.altitude - secondPrediction[i].motion.altitude);

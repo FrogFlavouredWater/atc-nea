@@ -1,0 +1,3 @@
+/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build/CMakeFiles/atc.dir
+/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build/CMakeFiles/edit_cache.dir
+/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build/CMakeFiles/rebuild_cache.dir

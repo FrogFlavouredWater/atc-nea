@@ -17,5 +17,6 @@ public:
     static void fail(const std::string& msg);
     static void spacer();
 
+    // Local smoke test for ANSI log formatting.
     static void test();
 };

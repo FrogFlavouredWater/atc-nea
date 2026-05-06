@@ -33,6 +33,7 @@ public:
     [[nodiscard]] bool predictionBreachesSeparation(const std::vector<PredictedAircraftState>& firstPrediction,
                                                     const std::vector<PredictedAircraftState>& secondPrediction) const;
 
+    // Normalize callsign ordering. every subsystem gets the same pair key.
     [[nodiscard]] static std::pair<std::string, std::string> makeConflictPair(const Aircraft& first,
                                                                                const Aircraft& second);
     [[nodiscard]] static std::pair<std::string, std::string> makeConflictPair(const std::string& first,

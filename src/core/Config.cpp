@@ -18,6 +18,7 @@ void clampDisplaySettings(DisplaySettings& settings) {
 }
 
 void clampSimSettings(SimSettings& settings) {
+    // Clamp each numeric field first. then fix relationships like min/max bounds.
     settings.maxAircraft = std::clamp(settings.maxAircraft,
                                       SimConfig::MIN_AIRCRAFT_COUNT,
                                       SimConfig::MAX_AIRCRAFT_COUNT);
@@ -53,7 +54,7 @@ void clampSimSettings(SimSettings& settings) {
 }
 
 void clampAppSettings(AppSettings& settings) {
-    // App settings are just the display and sim settings bundled together.
+    // Just clamp display and sim settings. combined wrapper stays thin.
     clampDisplaySettings(settings.display);
     clampSimSettings(settings.sim);
 }

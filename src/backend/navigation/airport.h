@@ -14,6 +14,7 @@ struct LocalizerSector {
 
 struct Localizer {
     double length = 18.0;
+    // Evaluate sectors from nearest matching range outward.
     std::vector<LocalizerSector> sectors = {
         {10.0, 35.0}, // 35-degree arc at 10nm
         {18.0, 10.0}  // 10-degree arc at 18nm
@@ -35,7 +36,9 @@ struct Airport
     [[nodiscard]] bool inLocalizerSignal(Vec2 pos) const {
         return localizer.isWithinSignal(position, runwayHeading, pos);
     }
+    // Positive in front of the runway on final.
     [[nodiscard]] double alongTrackToRunway(Vec2 pos) const;
+    // Signed cross-track. callers can tell left/right of centreline.
     [[nodiscard]] double crossTrackError(Vec2 pos) const;
     [[nodiscard]] double minLocalizerRange() const;
     [[nodiscard]] std::pair<double, double> ilsCaptureAltitudeBandFt(double alongTrackNm) const;

@@ -1,0 +1,92 @@
+[
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/app/main.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/app/main.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/app/main.cpp",
+  "output": "CMakeFiles/atc.dir/src/app/main.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/app/engine.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/app/engine.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/app/engine.cpp",
+  "output": "CMakeFiles/atc.dir/src/app/engine.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/frontend/ui.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/frontend/ui.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/frontend/ui.cpp",
+  "output": "CMakeFiles/atc.dir/src/frontend/ui.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/core/Config.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/core/Config.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/core/Config.cpp",
+  "output": "CMakeFiles/atc.dir/src/core/Config.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/core/Logger.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/core/Logger.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/core/Logger.cpp",
+  "output": "CMakeFiles/atc.dir/src/core/Logger.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/backend/aircraft/Aircraft.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/aircraft/Aircraft.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/aircraft/Aircraft.cpp",
+  "output": "CMakeFiles/atc.dir/src/backend/aircraft/Aircraft.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/backend/aircraft/AircraftMotion.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/aircraft/AircraftMotion.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/aircraft/AircraftMotion.cpp",
+  "output": "CMakeFiles/atc.dir/src/backend/aircraft/AircraftMotion.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/backend/navigation/GuidancePreview.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/navigation/GuidancePreview.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/navigation/GuidancePreview.cpp",
+  "output": "CMakeFiles/atc.dir/src/backend/navigation/GuidancePreview.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/backend/navigation/airport.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/navigation/airport.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/backend/navigation/airport.cpp",
+  "output": "CMakeFiles/atc.dir/src/backend/navigation/airport.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/sim/ConflictDetector.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/ConflictDetector.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/ConflictDetector.cpp",
+  "output": "CMakeFiles/atc.dir/src/sim/ConflictDetector.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/sim/ConflictResolver.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/ConflictResolver.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/ConflictResolver.cpp",
+  "output": "CMakeFiles/atc.dir/src/sim/ConflictResolver.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/sim/Scheduler.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/Scheduler.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/Scheduler.cpp",
+  "output": "CMakeFiles/atc.dir/src/sim/Scheduler.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/sim/Simulation.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/Simulation.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/Simulation.cpp",
+  "output": "CMakeFiles/atc.dir/src/sim/Simulation.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/sim/SpawnService.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/SpawnService.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/SpawnService.cpp",
+  "output": "CMakeFiles/atc.dir/src/sim/SpawnService.cpp.o"
+},
+{
+  "directory": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/build",
+  "command": "/usr/bin/c++  -I/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src -I/Users/hugowb/Desktop/Main/Schoolwork/CS/vcpkg/installed/arm64-osx/include -isystem /opt/homebrew/Cellar/raylib/5.5/include -std=gnu++2b -arch arm64 -Wall -Wextra -I/opt/homebrew/Cellar/raylib/5.5/include -o CMakeFiles/atc.dir/src/sim/TrajectoryPredictor.cpp.o -c /Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/TrajectoryPredictor.cpp",
+  "file": "/Users/hugowb/Desktop/Main/Schoolwork/CS/atc/src/sim/TrajectoryPredictor.cpp",
+  "output": "CMakeFiles/atc.dir/src/sim/TrajectoryPredictor.cpp.o"
+}
+]

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <numbers>
 
-//generic performance model shared by all spawned aircraft.
+// Generic transport-like performance model for all spawned aircraft.
 struct AircraftPerformance {
     double minSpeedKts = 120.0;
     double maxSpeedKts = 320.0;
@@ -17,12 +17,14 @@ struct AircraftPerformance {
     double altitudeCaptureToleranceFt = 25.0;
 };
 
+// Bank angle gives the ideal turn rate. clamp slow/fast edge cases back to believable limits.
 inline double calculateTurnRateDegPerSec(double speedKts, const AircraftPerformance& performance) {
     const double bankAngleRad = performance.bankAngleDegrees * std::numbers::pi_v<double> / 180.0;
     const double turnRate = 1091.0 * std::tan(bankAngleRad) / speedKts; // approximation for turn rate (deg/s)
     return std::clamp(turnRate, performance.minTurnRateDegPerSec, performance.maxTurnRateDegPerSec);
 }
 
+// Derive turn radius from speed and rate. shared geometry for previews, holds, live motion.
 inline double calculateTurnRadiusNm(double speedKts, double turnRateDegPerSec) {
     if (speedKts <= 0.0 || turnRateDegPerSec <= 0.0) {
         return 0.0;

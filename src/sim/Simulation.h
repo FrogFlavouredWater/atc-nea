@@ -35,9 +35,11 @@ private:
     std::set<std::pair<std::string, std::string>> activePredictedConflictPairs;
     std::set<std::pair<std::string, std::string>> visualPredictedConflictPairs;
     std::set<std::pair<std::string, std::string>> activeCollisionPairs;
+    // Expiry map for lingering predicted links. keeps stale pairs out of live detector state.
     std::map<std::pair<std::string, std::string>, double> visualPredictedConflictExpiries;
     std::map<std::string, double> destroyedAircraftRemovalTimes;
     std::vector<PredictedConflictAssessment> predictedConflicts;
+    // simTime drives aircraft logic. uiTime tracks real seconds for latches/timers.
     double simTime = 0.0;
     double uiTime = 0.0;
 
@@ -63,6 +65,7 @@ private:
 
 public:
     Simulation();
+    // dt is sim time. realDt is wall-clock style UI time.
     void update(double dt, double realDt);
     void applySettings(const SimSettings& sim);
     SpawnRequestResult requestRandomSpawn();

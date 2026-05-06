@@ -79,13 +79,13 @@ SpawnRequestResult SpawnService::requestRandomSpawn(const SimSettings& settings,
                                                     const std::vector<Airport>& airports,
                                                     const std::vector<std::unique_ptr<Aircraft>>& aircraft,
                                                     const TrajectoryPredictor& predictor) {
-    // check for airspace max capacity
+    // Check capacity first. obvious failures bail fast.
     if (aircraft.size() >= static_cast<size_t>(settings.maxAircraft)) {
         return rejectSpawn(SpawnRejectionReason::CAPACITY_REACHED,
                            "Spawn blocked: max aircraft reached");
     }
 
-    // if spawnable area too small, fixed edge points would collapse into invalid or overlapping positions
+    // Too-narrow airspace breaks fixed edge entries.
     const double widthNm = settings.maxXNm - settings.minXNm;
     const double heightNm = settings.maxYNm - settings.minYNm;
     if (widthNm <= 2.0 * kEdgeInsetNm || heightNm <= 2.0 * kEdgeInsetNm) {
@@ -93,8 +93,7 @@ SpawnRequestResult SpawnService::requestRandomSpawn(const SimSettings& settings,
                            "Spawn blocked: no valid entry points");
     }
 
-    // build 8 spawn candidates
-    // create first one that does not create an immediate or near immediate collision
+    // Shuffle standard edge entries. repeated requests won't favor one side first.
     auto plans = buildPlans(settings, airports);
     std::shuffle(plans.begin(), plans.end(), rng);
     for (const auto& plan : plans) {
@@ -109,7 +108,7 @@ SpawnRequestResult SpawnService::requestRandomSpawn(const SimSettings& settings,
         };
     }
 
-    // if every edge candidate failed safety check
+    // Every candidate failed immediate overlap or short look-ahead collision checks.
     return rejectSpawn(SpawnRejectionReason::UNSAFE_SPAWN,
                        "Spawn blocked: unsafe entry");
 }
@@ -118,42 +117,36 @@ bool SpawnService::isSafe(const SpawnPlan& plan,
                           const SimSettings& sim,
                           const std::vector<std::unique_ptr<Aircraft>>& aircraft,
                           const TrajectoryPredictor& predictor) const {
-    // Turn the plan into a temporary Aircraft so the same motion/prediction
-    // code used elsewhere in the sim can evaluate it.
+    // Temporary Aircraft from the plan. reuse the same motion/prediction code.
     Aircraft spawnedAircraft(plan.position,
                              plan.headingDeg,
                              plan.speedKts,
                              plan.altitudeFt,
                              plan.callsign);
 
-    // Convert the sprite size from pixels into nautical miles so collision
-    // checks operate in simulation coordinates.
+    // Convert sprite size from pixels to NM. collision checks stay in sim coordinates.
     const double collisionBoxSizeNm = sim.pixelsPerNm > 0.0
         ? static_cast<double>(sim.aircraftSize) / sim.pixelsPerNm
         : 0.0;
 
-    // Predict the new aircraft once up front, then compare that path against
-    // each existing aircraft.
+    // Predict the new aircraft once up front. then compare against each existing path.
     const auto spawnPath = predictor.predict(spawnedAircraft,
                                              kSpawnLookaheadSeconds,
                                              kSpawnPredictionStepSeconds);
 
     for (const auto& plane : aircraft) {
-        // Reject a spawn that already falls inside another aircraft's
-        // collision box right now.
+        // Reject spawns already inside another aircraft's collision box.
         if (spawnedAircraft.collidesWith(*plane, collisionBoxSizeNm)) {
             return false;
         }
 
-        // Then reject a spawn that would overlap shortly after appearing.
+        // Then reject spawns that would overlap shortly after appearing.
         const auto planePath = predictor.predict(*plane,
                                                  kSpawnLookaheadSeconds,
                                                  kSpawnPredictionStepSeconds);
         const size_t sampleCount = std::min(spawnPath.size(), planePath.size());
         for (size_t i = 0; i < sampleCount; ++i) {
-            // Compare the sampled future positions directly. A predicted
-            // collision uses the same horizontal collision box plus vertical
-            // collision band as the live cleanup rule.
+            // Compare sampled future positions directly. same horizontal box and vertical band as live cleanup.
             const double dx = std::abs(spawnPath[i].motion.position.x - planePath[i].motion.position.x);
             const double dy = std::abs(spawnPath[i].motion.position.y - planePath[i].motion.position.y);
             const double altitudeDiffFt = std::abs(spawnPath[i].motion.altitude - planePath[i].motion.altitude);
@@ -170,8 +163,7 @@ bool SpawnService::isSafe(const SpawnPlan& plan,
 
 std::array<SpawnPlan, 8> SpawnService::buildPlans(const SimSettings& sim,
                                                   const std::vector<Airport>& airports) {
-    // If there is an airport, arrivals roughly aim for it. Otherwise they aim
-    // toward the centre of the map.
+    // Aim arrivals at the airport when present. otherwise use map centre.
     const Vec2 target = !airports.empty()
         ? airports.front().position
         : Vec2{
@@ -179,7 +171,7 @@ std::array<SpawnPlan, 8> SpawnService::buildPlans(const SimSettings& sim,
             (sim.minYNm + sim.maxYNm) / 2.0
         };
 
-    // Compute the inset rectangle used for the fixed spawn points.
+    // Inset rectangle for fixed spawn points.
     const double minX = sim.minXNm + kEdgeInsetNm;
     const double maxX = sim.maxXNm - kEdgeInsetNm;
     const double minY = sim.minYNm + kEdgeInsetNm;
@@ -187,7 +179,7 @@ std::array<SpawnPlan, 8> SpawnService::buildPlans(const SimSettings& sim,
     const double usableWidthNm = maxX - minX;
     const double usableHeightNm = maxY - minY;
 
-    // Eight spawn points: two on each side of the map.
+    // Eight spawn points. two on each side of the map.
     const std::array<Vec2, 8> positions{
         Vec2{minX, minY + usableHeightNm * 0.25},
         Vec2{minX, minY + usableHeightNm * 0.75},
@@ -210,13 +202,12 @@ std::array<SpawnPlan, 8> SpawnService::buildPlans(const SimSettings& sim,
         "SOUTH_EAST"
     };
 
-    // Fill each plan with one random heading, speed, altitude, and callsign.
+    // Fill each plan with random heading, speed, altitude, callsign.
     std::array<SpawnPlan, 8> plans{};
     for (size_t i = 0; i < positions.size(); ++i) {
         const Vec2 position = positions[i];
 
-        // Base heading points straight at the target; the final heading is
-        // sampled inside a small spread around that direction.
+        // Base heading points at the target. final heading stays inside a small spread.
         const double headingDeg = headingToward(position, target);
         std::uniform_real_distribution<double> speedDist(kMinSpeedKts, kMaxSpeedKts);
         plans[i] = SpawnPlan{

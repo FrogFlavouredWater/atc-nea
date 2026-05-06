@@ -65,6 +65,7 @@ inline constexpr SimSettings DEFAULTS{
 }
 
 namespace AppConfig {
+// Bundle the two editable settings groups into one default.
 inline constexpr AppSettings DEFAULTS{
     DisplayConfig::DEFAULTS,
     SimConfig::DEFAULTS
@@ -116,6 +117,7 @@ inline constexpr double RESOLUTION_SPEED_STEP_KTS = 20.0;
 inline constexpr double ILS_CAPTURE_HEADING_TOLERANCE_DEG = 35.0;
 inline constexpr double ILS_CAPTURE_MIN_SPEED_KTS = 120.0;
 inline constexpr double ILS_CAPTURE_MAX_SPEED_KTS = 185.0;
+// Outer/inner capture bands. stops unrealistic ILS snaps from bad altitudes.
 inline constexpr double ILS_OUTER_CAPTURE_MIN_ALTITUDE_FT = 2500.0;
 inline constexpr double ILS_OUTER_CAPTURE_MAX_ALTITUDE_FT = 4000.0;
 inline constexpr double ILS_INNER_CAPTURE_MIN_ALTITUDE_FT = 1000.0;

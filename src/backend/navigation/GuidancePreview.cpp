@@ -65,6 +65,7 @@ double predictionHorizon(const Aircraft& aircraft) {
 HeadingVectorPreview buildHeadingVector(const Aircraft& aircraft, const TurnArcPreview& turnArc) {
     HeadingVectorPreview preview;
 
+    // Scale preview length with target speed. avoids one-size-fits-all look-ahead lines.
     const double previewLengthNm = std::clamp(
         aircraft.getTargetSpeed() / 3600.0 * kHeadingVectorPreviewSeconds,
         kHeadingVectorMinLengthNm,
@@ -126,6 +127,7 @@ HoldPreview buildHoldPreview(const Aircraft& aircraft) {
         return preview;
     }
 
+    // Rebuild the same racetrack geometry. keeps the preview honest to live hold logic.
     const double turnDirection = instruction.holdTurnDirection >= 0 ? 1.0 : -1.0;
     const Vec2 axis = directionVectorForHeading(instruction.targetHeading);
     const Vec2 lateralAxis = Vec2{

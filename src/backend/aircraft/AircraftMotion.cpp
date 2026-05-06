@@ -9,6 +9,7 @@ constexpr double kCommandEpsilon = 0.01;
 constexpr double kMinutesPerSecond = 1.0 / 60.0;
 
 void updateTurnDynamics(AircraftMotionState& motion, const AircraftPerformance& performance) {
+    // Recompute turn performance from latest speed. even small speed changes affect rate/radius.
     motion.turnRateDegPerSec = calculateTurnRateDegPerSec(motion.speed, performance);
     motion.turnRadiusNm = calculateTurnRadiusNm(motion.speed, motion.turnRateDegPerSec);
 }
@@ -39,6 +40,7 @@ void updateSpeed(AircraftMotionState& motion,
 }
 
 void updateHeading(AircraftMotionState& motion, const AircraftCommand& command, double dt) {
+    // Rate-limit heading changes from current turn performance. no snapping to target.
     const double headingDiff = getShortestAngleDiff(command.targetHeading, motion.heading);
     if (std::abs(headingDiff) <= kCommandEpsilon) {
         motion.heading = normalizeAngle(command.targetHeading);
@@ -55,6 +57,7 @@ void updateAltitude(AircraftMotionState& motion,
                     const AircraftCommand& command,
                     const AircraftPerformance& performance,
                     double dt) {
+    // Snap altitude inside a small capture tolerance. avoids endless few-foot chatter.
     const double altitudeDiff = static_cast<double>(command.targetAltitude) - motion.altitude;
     if (std::abs(altitudeDiff) <= performance.altitudeCaptureToleranceFt) {
         motion.altitude = static_cast<double>(command.targetAltitude);

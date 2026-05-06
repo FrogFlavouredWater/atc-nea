@@ -10,10 +10,12 @@
 
 struct AircraftTrailPoint {
     Vec2 position{};
+    // Aircraft-local elapsed time, not wall time.
     double recordedAtSeconds = 0.0;
 };
 
 enum class HoldPhase {
+    // Two straight legs, two turn segments.
     OUTBOUND,
     TURN_INBOUND,
     INBOUND,
@@ -40,6 +42,7 @@ private:
     int assignedIlsAirportIndex = -1;
     HoldPhase holdPhase = HoldPhase::OUTBOUND;
 
+    // Internal helpers for command sync, hold logic, trail upkeep.
     void syncCommandToInstruction();
     void updateHoldCommand();
     void updatePhaseFromInstruction();
